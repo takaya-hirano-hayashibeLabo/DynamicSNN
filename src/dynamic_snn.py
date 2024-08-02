@@ -118,10 +118,11 @@ class DynamicSNN(nn.Module):
 
 
         modules=[]
+        is_bias=False
 
         #>> 入力層 >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
         modules+=[
-            nn.Linear(self.in_size, self.hiddens[0]),
+            nn.Linear(self.in_size, self.hiddens[0],bias=is_bias),
             DynamicLIF(
                 dt=self.dt,init_tau=self.init_tau,threshold=self.v_threshold,vrest=self.v_rest,
                 reset_mechanism=self.reset_mechanism,spike_grad=self.spike_grad,output=False
@@ -134,7 +135,7 @@ class DynamicSNN(nn.Module):
         prev_hidden=self.hiddens[0]
         for hidden in self.hiddens[1:]:
             modules+=[
-                nn.Linear(prev_hidden, hidden),
+                nn.Linear(prev_hidden, hidden,bias=is_bias),
                 DynamicLIF(
                     dt=self.dt,init_tau=self.init_tau,threshold=self.v_threshold,vrest=self.v_rest,
                     reset_mechanism=self.reset_mechanism,spike_grad=self.spike_grad,output=False
@@ -146,7 +147,7 @@ class DynamicSNN(nn.Module):
 
         #>> 出力層 >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
         modules+=[
-            nn.Linear(self.hiddens[-1], self.out_size),
+            nn.Linear(self.hiddens[-1], self.out_size,bias=is_bias),
             DynamicLIF(
                 dt=self.dt,init_tau=self.init_tau,threshold=self.v_threshold,vrest=self.v_rest,
                 reset_mechanism=self.reset_mechanism,spike_grad=self.spike_grad,output=True
@@ -166,15 +167,22 @@ class DynamicSNN(nn.Module):
     def __set_dynamic_params(self,a):
         """
         LIFの時定数&膜抵抗を変動させる関数
-        :param a: [スカラ]その瞬間の速度倍率
+        :param a: [スカラ]その瞬間の時間スケール
         """
         for layer in self.net:
-            if isinstance(layer,DynamicLIF): #ラプラス変換によると速度倍率をかけると上手く行くはず
+            if isinstance(layer,DynamicLIF): #ラプラス変換によると時間スケールをかけると上手く行くはず
 
                 if layer.tau_pool is None:
                     layer.tau_pool=layer.tau.clone() #学習済みのtauをpoolしとく
-                layer.tau = layer.tau_pool.clone()*a
+                layer.tau = nn.Parameter(layer.tau_pool.clone()*a)
                 layer.r=1.0*a
+
+
+    def __reset_params(self):
+        for layer in self.net:
+            if isinstance(layer,DynamicLIF):
+                layer.tau=nn.Parameter(layer.tau_pool.clone())
+                layer.r=1
 
 
     def forward(self,s:torch.Tensor):
@@ -202,7 +210,7 @@ class DynamicSNN(nn.Module):
     def dynamic_forward(self,s:torch.Tensor,a:torch.Tensor):
         """
         :param s: スパイク列 [T x batch x ...]
-        :param a: 速度倍率リスト [T] バッチ間で速度倍率は統一する
+        :param a: 時間スケールリスト [T] バッチ間で時間スケールは統一する
         :return out_s: [T x batch x ...]
         :return out_v: [T x batch x ...]
         """
@@ -223,6 +231,8 @@ class DynamicSNN(nn.Module):
 
         out_s=torch.stack(out_s,dim=0)
         out_v=torch.stack(out_v,dim=0)
+
+        self.__reset_params()
 
         return out_s,out_v
     
