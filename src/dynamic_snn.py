@@ -173,7 +173,6 @@ class DynamicSNN(nn.Module):
 
                 if layer.tau_pool is None:
                     layer.tau_pool=layer.tau.clone() #学習済みのtauをpoolしとく
-
                 layer.tau = layer.tau_pool.clone()*a
                 layer.r=1.0*a
 
@@ -231,7 +230,7 @@ class DynamicSNN(nn.Module):
 
 if __name__=="__main__":
     """
-    テスト通過項目
+    テスト項目
     :forwad
         :モデルの入出力
         :GPUの利用
@@ -242,6 +241,7 @@ if __name__=="__main__":
         :モデルの入出力
         :GPUの利用
         :DynamicLIFのτのサイズ
+        :DynamicLIFのτの変動
     """
 
     import yaml
@@ -252,7 +252,7 @@ if __name__=="__main__":
         conf = yaml.safe_load(file)
 
     # Create a random input tensor
-    T = 10  # Number of timesteps
+    T = 1000  # Number of timesteps
     batch_size = 5
     input_size = conf["model"]["in-size"]
     device = "cuda:0"
