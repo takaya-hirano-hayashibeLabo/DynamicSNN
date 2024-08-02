@@ -11,7 +11,7 @@ class DynamicLIF(nn.Module):
 
     def __init__(self,dt,init_tau=0.5,threshold=1.0,vrest=0,reset_mechanism="zero",spike_grad=surrogate.fast_sigmoid(),output=False):
         """
-        :param dt: LIFモデルを差分方程式にしたときの⊿t. 元の入力がスパイク時系列ならのとデータと同じ⊿t. 
+        :param dt: LIFモデルを差分方程式にしたときの⊿t. 元の入力がスパイク時系列ならもとデータと同じ⊿t. 
         :param init_tau: 膜電位時定数τの初期値
         :param threshold: 発火しきい値
         :param vrest: 静止膜電位. 計算がややこしくなるので0でいい気がする
@@ -118,7 +118,7 @@ class DynamicSNN(nn.Module):
 
 
         modules=[]
-        is_bias=False
+        is_bias=False #biasはつけちゃダメ. ラプラス変換の式が成り立たなくなる.
 
         #>> 入力層 >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
         modules+=[
@@ -182,7 +182,7 @@ class DynamicSNN(nn.Module):
         for layer in self.net:
             if isinstance(layer,DynamicLIF):
                 layer.tau=nn.Parameter(layer.tau_pool.clone())
-                layer.r=1
+                layer.r=1.0
 
 
     def forward(self,s:torch.Tensor):
