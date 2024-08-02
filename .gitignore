@@ -1,0 +1,14 @@
+*.pth
+*.csv
+*.png
+*.svg
+*.mp4
+*.pyc
+__pycache__
+*.gz
+*.npy
+*.zip
+*.bin
+*.h5
+*.hdf5
+cache
