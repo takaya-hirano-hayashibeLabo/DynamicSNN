@@ -83,7 +83,10 @@ def main():
     with open('conf.yml', 'r') as file:
         config = yaml.safe_load(file)
     model=DynamicSNN(conf=config["model"])
-    model.eval()
+
+    # Debugging parameters of each layer
+    for name, param in model.named_parameters():
+        print(f"Layer: {name} | Size: {param.size()} | Values : {param[:2]}")  # Print first 2 values for brevity    model.eval()
 
     T=250
     batch=1
@@ -97,11 +100,13 @@ def main():
     base_s,base_v=model(base_input)
 
 
-    a=2
+    a=3  # 'a' can now be a float
     # Create scaled_input by shifting indices by a factor of 'a'
-    scaled_input = torch.zeros(size=(a * T, batch, insize))
+    scaled_input = torch.zeros(size=(int(a * T), batch, insize))
     for t in range(T):
-        scaled_input[a * t] = base_input[t]
+        scaled_index = int(a * t)
+        if scaled_index < scaled_input.shape[0]:
+            scaled_input[scaled_index] = base_input[t]
 
     org_s,org_v=model.forward(scaled_input)
     scaled_s,scaled_v=model.dynamic_forward(scaled_input,a=torch.Tensor([a for _ in range(scaled_input.shape[0])]))

@@ -1,0 +1,24 @@
+train:
+  datapath: /mnt/ssd1/hiranotakaya/master/dev/workspace/prj_202409_2MR/laplace-version/train-data/xor_v2
+  time_sequence: 300
+  batch: 32
+  epoch: 10
+  iter: -1 #ここは-1にするとmaxまで
+  lr: 0.001
+  save_interval: 5 #epochごと
+
+model:
+  type: dynamic-snn
+
+  in-size: 12
+  hiddens: [8,16,32]
+  out-size: 2
+  dropout: 0.0
+
+  dt: 0.001 #s
+  init-tau: 0.05 #dt/tauが1を超えないようにする.
+  v-threshold: 0.01
+  v-rest: 0.0
+  reset-mechanism: zero
+  spike-grad: fast-sigmoid
+  output-membrane: false
