@@ -147,3 +147,13 @@ def scale_sequence(data:np.ndarray,a:list,dt:float):
 
     return np.array(scaled_data)
 
+
+def calculate_accuracy(output, target):
+    """
+    LSTMとかのaccチェックするための関数
+    """
+    import torch
+    predicted:torch.Tensor = torch.argmax(output, 1)
+    correct = (predicted == target).sum().item()
+    accuracy = correct / target.size(0)
+    return accuracy

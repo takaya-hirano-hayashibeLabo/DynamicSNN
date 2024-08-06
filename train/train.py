@@ -14,9 +14,10 @@ from torch.utils.data import DataLoader
 import pandas as pd
 
 
-from src.utils import load_yaml,load_hdf5,print_terminal,CustomDataset
+from src.utils import load_yaml,load_hdf5,print_terminal,CustomDataset,calculate_accuracy
 from src.dynamic_snn import DynamicSNN
 from src.snn import SNN 
+from src.lstm import LSTM
 
 def main():
     parser = argparse.ArgumentParser()
@@ -49,6 +50,9 @@ def main():
     elif model_conf["type"]=="snn".casefold():
         model=SNN(model_conf)
         criterion=SF.ce_rate_loss()
+    elif model_conf["type"]=="lstm".casefold():
+        model=LSTM(model_conf)
+        criterion=torch.nn.CrossEntropyLoss()
     else:
         raise ValueError(f"model type {model_conf['type']} is not supportated...")
     
@@ -102,7 +106,11 @@ def main():
             optim.step()
             optim.zero_grad()
             train_loss_list.append(loss.item())
-            train_acc_list.append(SF.accuracy_rate(outputs,targets))
+
+            if "snn".casefold() in model_conf["type"]:
+                train_acc_list.append(SF.accuracy_rate(outputs,targets))
+            else:
+                train_acc_list.append(calculate_accuracy(outputs,targets))
 
             print(f"Epoch [{e+1}/{epoch}], Step [{batch_idx}/{len(train_loader)}], Loss: {loss.item():.4f}")
 
@@ -119,7 +127,10 @@ def main():
                 inputs, targets = inputs.to(device).permute((1,0,*[i+2 for i in range(inputs.ndim-2)])), targets.to(device)
                 outputs = model(inputs)
                 val_loss += criterion(outputs, targets).item()
-                test_acc_list.append(SF.accuracy_rate(outputs,targets))
+                if "snn".casefold() in model_conf["type"]:
+                    test_acc_list.append(SF.accuracy_rate(outputs,targets))
+                else:
+                    test_acc_list.append(calculate_accuracy(outputs,targets))
 
             val_loss /= len(test_loader)
             print(f"Validation Loss after Epoch [{e+1}/{epoch}]: {val_loss:.4f}")
