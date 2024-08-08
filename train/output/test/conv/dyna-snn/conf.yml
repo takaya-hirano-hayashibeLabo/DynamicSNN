@@ -6,17 +6,25 @@ train:
   iter: -1 #ここは-1にするとmaxまで
   lr: 0.001
   save_interval: 5 #epochごと
+  datatype: xor 
 
 model:
   type: dynamic-snn
 
   in-size: 12
-  hiddens: [8,16,32]
+  in-channel: 2 
   out-size: 2
+  hiddens: [8,16,32]
+  pool-type: max
+  is-bn: true #batch normalizationするかどうか
+
+  linear-hidden: 32
+
   dropout: 0.0
 
   dt: 0.001 #s
-  init-tau: 0.05 #dt/tauが1を超えないようにする
+  init-tau: 0.05 #dt/tauが1を超えないようにする.
+  min-tau: 0.01
   v-threshold: 0.01
   v-rest: 0.0
   reset-mechanism: zero

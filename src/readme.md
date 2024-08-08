@@ -1,7 +1,9 @@
 # src
 スクリプトディレクトリ
 
-## dynamic_snn
+## model
+
+### dynamic_snn
 動的に時定数と膜抵抗を変動させるSNN.  
 importすれば普通のpytorchのモデルと同じように使える.  
 

@@ -4,7 +4,7 @@ from snntorch import surrogate
 from math import log
 from tqdm import tqdm
 
-from .scale_predictor import ScalePredictor
+from scale_predictor import ScalePredictor
 
 class DynamicLIF(nn.Module):
     """
@@ -53,10 +53,14 @@ class DynamicLIF(nn.Module):
         #     dtau=(self.tau<self.dt)*self.dt
         #     self.tau=self.tau-dtau
 
-        # print(f"tau:{self.tau.shape}, v:{self.v.shape}, current:{current.shape}")
-        # print(self.tau)
-        # print(self.v)
-        # print("--------------")
+        # #shape debugging
+        # try:
+        #     print(f"tau:{self.w.shape}, v:{self.v.shape if not self.v==0.0 else 0}, current:{current.shape}")
+        #     # print(self.w)
+        #     # print(self.v)
+        #     print("--------------")
+        # except:
+        #     pass
 
         tau=self.min_tau+self.w.sigmoid() #tauが小さくなりすぎるとdt/tauが1を超えてしまう
         dv=self.dt/(tau*self.a) * ( -(self.v-self.vrest) + (self.a*self.r)*current ) #膜電位vの増分
@@ -152,11 +156,11 @@ class DynamicSNN(nn.Module):
         ]
         #<< 出力層 <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 
-        self.net=nn.Sequential(*modules)
+        self.model=nn.Sequential(*modules)
 
 
     def __init_lif(self):
-        for layer in self.net:
+        for layer in self.model:
             if isinstance(layer,DynamicLIF):
                 layer.init_voltage()
 
@@ -166,13 +170,13 @@ class DynamicSNN(nn.Module):
         LIFの時定数&膜抵抗を変動させる関数
         :param a: [スカラ]その瞬間の時間スケール
         """
-        for layer in self.net:
+        for layer in self.model:
             if isinstance(layer,DynamicLIF): #ラプラス変換によると時間スケールをかけると上手く行くはず
                 layer.a = a
 
 
     def __reset_params(self):
-        for layer in self.net:
+        for layer in self.model:
             if isinstance(layer,DynamicLIF):
                 layer.a=1.0
 
@@ -186,16 +190,16 @@ class DynamicSNN(nn.Module):
         """
 
         T=s.shape[0]
+        batch_size=s.shape[1]
         self.__init_lif()
 
-        out_s,out_v=[],[]
+        # Preallocate output tensors for better performance
+        out_s = torch.empty(T, batch_size, self.out_size, device=s.device)
+        out_v = torch.empty(T, batch_size, self.out_size, device=s.device)
         for t in range(T):
-            st,vt=self.net(s[t])
-            out_s.append(st)
-            out_v.append(vt)
-
-        out_s=torch.stack(out_s,dim=0)
-        out_v=torch.stack(out_v,dim=0)
+            st,vt=self.model(s[t])
+            out_s[t]=st
+            out_v[t]=vt
 
         if self.output_mem:
             return out_s,out_v
@@ -211,7 +215,7 @@ class DynamicSNN(nn.Module):
         :return out_s: [T x batch x ...]
         :return out_v: [T x batch x ...]
         """
-        self.net.eval() #絶対学習しない
+        self.model.eval() #絶対学習しない
 
         T=s.shape[0]
         self.__init_lif()
@@ -222,7 +226,7 @@ class DynamicSNN(nn.Module):
             with torch.no_grad():
                 a=scale_predictor.predict_scale(s[t]) #現在のscaleを予測
                 self.__set_dynamic_params(a)
-                st,vt=self.net(s[t])
+                st,vt=self.model(s[t])
 
             out_s.append(st)
             out_v.append(vt)
@@ -249,7 +253,7 @@ class DynamicSNN(nn.Module):
         :return out_s: [T x batch x ...]
         :return out_v: [T x batch x ...]
         """
-        self.net.eval() #絶対学習しない
+        self.model.eval() #絶対学習しない
 
         T=s.shape[0]
         self.__init_lif()
@@ -259,7 +263,7 @@ class DynamicSNN(nn.Module):
 
             with torch.no_grad():
                 self.__set_dynamic_params(a[t])
-                st,vt=self.net(s[t])
+                st,vt=self.model(s[t])
 
             out_s.append(st)
             out_v.append(vt)
@@ -274,8 +278,153 @@ class DynamicSNN(nn.Module):
         
         elif not self.output_mem:
             return out_s
-    
 
+
+def get_conv_outsize(model,in_size,in_channel):
+    input_tensor = torch.randn(1, in_channel, in_size, in_size)
+    with torch.no_grad():
+        output = model(input_tensor)
+    return output.shape
+
+
+
+def add_csnn_block(
+        in_size,in_channel,out_channel,kernel,stride,padding,is_bias,is_bn,pool_type,dropout,
+        lif_dt,lif_init_tau,lif_min_tau,lif_threshold,lif_vrest,lif_reset_mechanism,lif_spike_grad,lif_output
+        ):
+    """
+    param: in_size: 幅と高さ (正方形とする)
+    param: in_channel: channel size
+    param: out_channel: 出力チャネルのサイズ
+    param: kernel: カーネルサイズ
+    param: stride: ストライドのサイズ
+    param: padding: パディングのサイズ
+    param: is_bias: バイアスを使用するかどうか
+    param: is_bn: バッチ正規化を使用するかどうか
+    param: pool_type: プーリングの種類 ("avg"または"max")
+    param: dropout: dropout rate
+    param: lif_dt: LIFモデルの時間刻み
+    param: lif_init_tau: LIFの初期時定数
+    param: lif_min_tau: LIFの最小時定数
+    param: lif_threshold: LIFの発火しきい値
+    param: lif_vrest: LIFの静止膜電位
+    param: lif_reset_mechanism: LIFの膜電位リセットメカニズム
+    param: lif_spike_grad: LIFのスパイク勾配関数
+    param: lif_output: LIFの出力を返すかどうか
+    """
+    
+    block=[]
+    block.append(
+        nn.Conv2d(
+            in_channels=in_channel,out_channels=out_channel,
+            kernel_size=kernel,stride=stride,padding=padding,bias=is_bias
+        )
+    )
+
+    if is_bn:
+        block.append(
+            nn.BatchNorm2d(out_channel)
+        )
+
+    if pool_type=="avg".casefold():
+        block.append(nn.AvgPool2d(2))
+    elif pool_type=="max".casefold():
+        block.append(nn.MaxPool2d(2))
+
+    #blockの出力サイズを計算
+    block_outsize=get_conv_outsize(nn.Sequential(*block),in_size=in_size,in_channel=in_channel) #[1(batch) x channel x h x w]
+
+    block.append(
+        DynamicLIF(
+            in_size=tuple(block_outsize[1:]), dt=lif_dt,
+            init_tau=lif_init_tau, min_tau=lif_min_tau,
+            threshold=lif_threshold, vrest=lif_vrest,
+            reset_mechanism=lif_reset_mechanism, spike_grad=lif_spike_grad,
+            output=lif_output
+        )
+    )
+
+    if dropout>0:
+        block.append(nn.Dropout2d(dropout))
+    
+    return block, block_outsize
+
+
+class DynamicCSNN(DynamicSNN):
+    """
+    DynamicSNNのCNNバージョン 
+    CNNでは1層スタックするごとにサイズが1/2になる
+    """
+
+    def __init__(self,conf):
+        super(DynamicCSNN,self).__init__(conf)
+
+        self.in_size = conf["in-size"]
+        self.in_channel = conf["in-channel"]
+        self.out_size = conf["out-size"]
+        self.hiddens = conf["hiddens"]
+        self.pool_type = conf["pool-type"]
+        self.is_bn = conf["is-bn"]
+        self.linear_hidden = conf["linear-hidden"]
+        self.dropout = conf["dropout"]
+        
+        self.output_mem=conf["output-membrane"]
+        self.dt = conf["dt"]
+        self.init_tau = conf["init-tau"]
+        self.min_tau=conf["min-tau"]
+        self.v_threshold = conf["v-threshold"]
+        self.v_rest = conf["v-rest"]
+        self.reset_mechanism = conf["reset-mechanism"]
+        if "fast".casefold() in conf["spike-grad"] and "sigmoid".casefold() in conf["spike-grad"]: 
+            self.spike_grad = surrogate.fast_sigmoid()
+
+
+
+        modules=[]
+
+        #>> 畳み込み層 >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+        in_c=self.in_channel
+        in_size=self.in_size
+        for hidden_c in self.hiddens:
+
+            block,block_outsize=add_csnn_block(
+                in_size=in_size, in_channel=in_c, out_channel=hidden_c,
+                kernel=3, stride=1, padding=1,  # カーネルサイズ、ストライド、パディングの設定
+                is_bias=False, is_bn=self.is_bn, pool_type=self.pool_type, dropout=self.dropout,
+                lif_dt=self.dt, lif_init_tau=self.init_tau, lif_min_tau=self.min_tau,
+                lif_threshold=self.v_threshold, lif_vrest=self.v_rest,
+                lif_reset_mechanism=self.reset_mechanism, lif_spike_grad=self.spike_grad,
+                lif_output=False  # 出力を返さない設定
+            )
+            modules+=block
+            in_c=hidden_c
+            in_size=block_outsize[-1]
+        #<< 畳み込み層 <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+
+
+
+        #>> 線形層 >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+        modules+=[
+            nn.Flatten(),
+            nn.Linear(block_outsize[1]*block_outsize[2]*block_outsize[3],self.linear_hidden,bias=False),
+            DynamicLIF(
+                in_size=(self.linear_hidden,),dt=self.dt,init_tau=self.init_tau, min_tau=self.min_tau,threshold=self.v_threshold,vrest=self.v_rest,
+                reset_mechanism=self.reset_mechanism,spike_grad=self.spike_grad,output=False
+            ),
+            nn.Linear(self.linear_hidden,self.out_size,bias=False),
+            DynamicLIF(
+                in_size=(self.out_size,),dt=self.dt,init_tau=self.init_tau, min_tau=self.min_tau,threshold=self.v_threshold,vrest=self.v_rest,
+                reset_mechanism=self.reset_mechanism,spike_grad=self.spike_grad,output=True
+            ),
+        ]
+        #<< 線形層 <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+
+
+        self.model=nn.Sequential(*modules)
+
+
+
+    
 
 if __name__=="__main__":
     """
@@ -311,6 +460,7 @@ if __name__=="__main__":
     # Initialize the model
     model = DynamicSNN(conf["model"])
     model.to(device)
+    print(model)
 
 
     print("test 'forward' func"+"-"*100)

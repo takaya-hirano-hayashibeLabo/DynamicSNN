@@ -32,6 +32,7 @@ class LIF(nn.Module):
 
         #>> tauを学習可能にするための調整 >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
         # 参考 [https://github.com/fangwei123456/Parametric-Leaky-Integrate-and-Fire-Spiking-Neuron/blob/main/codes/models.py]
+        self.is_train_tau=is_train_tau
         init_w=-log(1/(self.init_tau-min_tau)-1)
         if is_train_tau:
             self.w=nn.Parameter(init_w * torch.ones(size=in_size))  # デフォルトの初期化
@@ -57,6 +58,8 @@ class LIF(nn.Module):
         # print(self.tau)
         # print(self.v)
         # print("--------------")
+        if not self.is_train_tau:
+            self.w=self.w.to(current.device)
 
         tau=self.min_tau+self.w.sigmoid() #tauが小さくなりすぎるとdt/tauが1を超えてしまう
         dv=self.dt/(tau) * ( -(self.v-self.vrest) + (self.r)*current ) #膜電位vの増分
@@ -173,10 +176,10 @@ class SNN(nn.Module):
         self.__init_lif()
 
         out_s,out_v=[],[]
-        for t in range(T):
-            st,vt=self.net(s[t])
-            out_s.append(st)
-            out_v.append(vt)
+        for st in s:
+            st_out,vt_out=self.net(st)
+            out_s.append(st_out)
+            out_v.append(vt_out)
 
         out_s=torch.stack(out_s,dim=0)
         out_v=torch.stack(out_v,dim=0)
