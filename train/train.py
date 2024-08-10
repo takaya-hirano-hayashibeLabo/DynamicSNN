@@ -15,9 +15,7 @@ import pandas as pd
 
 
 from src.utils import load_yaml,load_hdf5,print_terminal,CustomDataset,calculate_accuracy
-from src.dynamic_snn import DynamicSNN
-from src.snn import SNN 
-from src.lstm import LSTM
+from src.model import DynamicSNN,SNN,LSTM
 
 def main():
     parser = argparse.ArgumentParser()

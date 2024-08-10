@@ -16,10 +16,8 @@ from copy import deepcopy
 from tqdm import tqdm
 
 
-from src.dynamic_snn import DynamicSNN
-from src.snn import SNN
-from src.scale_predictor import ScalePredictor
-from src.utils import load_yaml,load_hdf5,print_terminal,CustomDataset,scale_sequence,resample_scale
+from src.model import DynamicSNN,SNN,ScalePredictor,LSTM
+from src.utils import load_yaml,load_hdf5,print_terminal,CustomDataset,scale_sequence,resample_scale,calculate_accuracy
 
     
 def main():
@@ -51,6 +49,8 @@ def main():
         scale_predictor=ScalePredictor(datatype=train_conf["datatype"])
     elif model_conf["type"]=="snn".casefold():
         model=SNN(model_conf)
+    elif model_conf["type"]=="lstm".casefold():
+        model=LSTM(model_conf)
     else:
         raise ValueError(f"model type {model_conf['type']} is not supportated...")
     model.load_state_dict(torch.load((Path(args.target)/"result/model_final.pth")))
@@ -75,7 +75,7 @@ def main():
     in_test,target_test=load_hdf5(test_files,num_workers=32) #[batch x time-sequence x ...], [batch]
     
     # ここでデータタイムスケールを変換
-    a=[30 for _ in range(len(in_test[0])+1)] #スケールリスト
+    a=[10 for _ in range(len(in_test[0])+1)] #スケールリスト
     # a=np.ones(len(in_test[0])+1) #スケールリスト
     # a[int(len(a)*1/3):int(len(a)*2/3)]=50
     in_test = scale_sequence(np.array(in_test),a=a,dt=model_conf["dt"])
@@ -102,7 +102,11 @@ def main():
                 # outputs = model.forward(inputs)
             else:
                 outputs = model(inputs)
-            test_acc_list.append(SF.accuracy_rate(outputs,targets))
+
+            if "snn".casefold() in model_conf["type"]:
+                test_acc_list.append(SF.accuracy_rate(outputs,targets))
+            else:
+                test_acc_list.append(calculate_accuracy(outputs,targets))
 
     print(f"Accuracy: {np.mean(test_acc_list)}")
     #<< テスト <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<

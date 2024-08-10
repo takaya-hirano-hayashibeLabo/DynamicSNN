@@ -4,7 +4,7 @@ from snntorch import surrogate
 from math import log
 from tqdm import tqdm
 
-from scale_predictor import ScalePredictor
+from .scale_predictor import ScalePredictor
 
 class DynamicLIF(nn.Module):
     """

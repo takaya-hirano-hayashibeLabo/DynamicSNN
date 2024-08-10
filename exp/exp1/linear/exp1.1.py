@@ -1,5 +1,5 @@
 from pathlib import Path
-ROOT=Path(__file__).parent.parent.parent
+ROOT=Path(__file__).parent.parent.parent.parent
 import sys
 sys.path.append(str(ROOT))
 
@@ -9,7 +9,8 @@ import matplotlib.pyplot as plt
 import torch.nn.functional as F
 
 
-from src.dynamic_snn import DynamicSNN
+from src.model import DynamicSNN
+# from src.model.dynamic_snn import DynamicSNN
 
 
 
@@ -109,7 +110,7 @@ def main():
             scaled_input[scaled_index] = base_input[t]
 
     org_s,org_v=model.forward(scaled_input)
-    scaled_s,scaled_v=model.dynamic_forward(scaled_input,a=torch.Tensor([a for _ in range(scaled_input.shape[0])]))
+    scaled_s,scaled_v=model.dynamic_forward_v1(scaled_input,a=torch.Tensor([a for _ in range(scaled_input.shape[0])]))
 
     plot_results2(base_input.detach(),scaled_input.detach(),base_v.detach(),scaled_v.detach(),org_v.detach(),"aaa")
 

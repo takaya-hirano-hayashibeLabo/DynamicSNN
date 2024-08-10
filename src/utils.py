@@ -1,6 +1,8 @@
 import h5py
 from multiprocessing import Pool
 from torch.utils.data import DataLoader, Dataset
+from torch import nn
+import torch
 import numpy as np
 from tqdm import tqdm
 
@@ -157,3 +159,51 @@ def calculate_accuracy(output, target):
     correct = (predicted == target).sum().item()
     accuracy = correct / target.size(0)
     return accuracy
+
+
+
+
+from math import ceil
+class Event2Frame():
+    def __init__(self, sensor_size,time_window):
+        """
+        :param sensor_size: (channel x h x w) ※必ずこの順番で与える
+        """
+        self.sensor_size=sensor_size
+        self.time_window=time_window
+
+    def __call__(self, events:np.ndarray):
+        """
+        :param events: [event_num x (x,y,p,t)]
+        """
+
+        t_start=events[0]["t"]
+        t_end=events[-1]["t"]
+        time_length=ceil((t_end-t_start)/self.time_window)
+
+        frame=np.zeros(shape=(time_length,)+self.sensor_size,dtype=np.int16)
+        current_time_window=t_start+self.time_window
+        t=0
+        for e in events:
+            if e["t"]>current_time_window:
+                current_time_window+=self.time_window
+                t+=1
+            frame[t,int(e["p"]),e["y"],e["x"]]=1
+
+        return frame
+    
+
+class Pool2DTransform(nn.Module):
+    def __init__(self, pool_size,pool_type="max"):
+        super(Pool2DTransform,self).__init__()
+        
+        if pool_type=="max".casefold():
+            self.pool_layer=nn.MaxPool2d(pool_size)
+        if pool_type=="avg".casefold():
+            self.pool_layer=nn.AvgPool2d(pool_size)
+
+    def __call__(self, events):
+        # tensor should be of shape (T, C, H, W)
+        with torch.no_grad():
+            events = self.pool_layer(events.to(torch.float))
+        return events  # Remove batch dimension

@@ -17,10 +17,10 @@
 import yaml
 from pathlib import Path
 import sys
-MODELDIR=Path(__file__).parent.parent.parent
+MODELDIR=Path(__file__).parent.parent
 sys.path.append(str(MODELDIR))
 import torch
-from dynamic_snn import DynamicCSNN,DynamicLIF
+from model.dynamic_snn import DynamicCSNN,DynamicLIF
 
 
 def main():
