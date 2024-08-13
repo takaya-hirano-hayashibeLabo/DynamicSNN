@@ -19,7 +19,7 @@ class CustomDataset(Dataset):
         return self.inputs[idx], self.targets[idx]
 
 
-def print_terminal(pre="\033[96m",contents="",suffi="\033[0m"):
+def print_terminal(contents="",pre="\033[96m",suffi="\033[0m"):
     """
     :param pre:接頭
     :param contentns: 末尾をカットされてもいいcontents
@@ -64,6 +64,18 @@ def load_hdf5(file_path_list: list, num_workers: int = 64):
     datas, targets = zip(*results)
     return list(datas), list(targets)
 
+
+def save_dict2json(data, saveto):
+    """
+    Save a dictionary to a specified path in JSON format.
+
+    Parameters:
+    data (dict): The dictionary to save.
+    saveto (str or Path): The path where the JSON file will be saved.
+    """
+    import json
+    with open(saveto, 'w') as json_file:
+        json.dump(data, json_file, indent=4, ensure_ascii=False)
 
 
 def resample_scale(a: list, target_length: int) -> list:
@@ -207,3 +219,39 @@ class Pool2DTransform(nn.Module):
         with torch.no_grad():
             events = self.pool_layer(events.to(torch.float))
         return events  # Remove batch dimension
+
+
+
+def save_heatmap_video(frames, output_path, file_name, fps=30, scale=5):
+    import cv2
+    import subprocess
+    import os
+
+    if not os.path.exists(output_path):
+        os.makedirs(output_path)
+
+    height, width = frames[0].shape
+    new_height, new_width = int(height * scale), int(width * scale)
+    fourcc = cv2.VideoWriter_fourcc(*'XVID')
+    tmpout = str(output_path / "tmp.avi")
+    video = cv2.VideoWriter(tmpout, fourcc, fps, (new_width, new_height), isColor=True)
+
+    for frame in frames:
+        # Normalize frame to range [0, 255] with original range [-1, 1]
+        normalized_frame = ((frame + 1) / 2 * 255).astype(np.uint8)
+        heatmap = cv2.applyColorMap(normalized_frame, cv2.COLORMAP_JET)
+        resized_heatmap = cv2.resize(heatmap, (new_width, new_height))
+        video.write(resized_heatmap)
+
+    video.release()
+
+    # Re-encode the video using ffmpeg
+    file_name = file_name + ".mp4" if not ".mp4" in file_name else file_name
+    ffmpeg_command = [
+        'ffmpeg', '-y', '-i', tmpout,
+        '-pix_fmt', 'yuv420p', '-vcodec', 'libx264',
+        '-crf', '23', '-preset', 'medium', str(output_path / file_name)
+    ]
+    subprocess.run(ffmpeg_command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    # Remove the temporary file
+    os.remove(tmpout)

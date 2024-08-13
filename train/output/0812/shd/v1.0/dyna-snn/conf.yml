@@ -1,0 +1,27 @@
+train:
+  batch: 512
+  epoch: 100
+  iter: -1 #ここは-1にするとmaxまで
+  lr: 0.001
+  save_interval: 10 #epochごと
+  datatype: shd
+  time-window: 1000
+  schedule-step: -1 #-1でscheduleなし
+  schedule-rate: 0.5
+
+model:
+  type: dynamic-snn
+
+  in-size: 700
+  hiddens: [512,256,128,64]
+  out-size: 20
+  dropout: 0.0
+
+  dt: 0.001 #s
+  init-tau: 0.005 #dt/tauが1を超えないようにする.
+  min-tau: 0.001
+  v-threshold: 0.01
+  v-rest: 0.0
+  reset-mechanism: zero
+  spike-grad: fast-sigmoid
+  output-membrane: false

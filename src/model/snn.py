@@ -3,6 +3,7 @@ import torch.nn as nn
 from snntorch import surrogate
 from math import log
 
+from .residual_block import ResidualBlock
 
 class LIF(nn.Module):
     def __init__(self,in_size:tuple,dt,init_tau=0.5,min_tau=0.1,threshold=1.0,vrest=0,reset_mechanism="zero",spike_grad=surrogate.fast_sigmoid(),output=False,is_train_tau=True):
@@ -11,7 +12,7 @@ class LIF(nn.Module):
         :param dt: LIFモデルを差分方程式にしたときの⊿t. 元の入力がスパイク時系列ならもとデータと同じ⊿t. 
         :param init_tau: 膜電位時定数τの初期値
         :param threshold: 発火しきい値
-        :param vrest: 静止膜電位. 計算がややこしくなるので0でいい気がする
+        :param vrest: 静止膜電位. 
         :paarm reset_mechanism: 発火後の膜電位のリセット方法の指定
         :param spike_grad: 発火勾配の近似関数
         """
@@ -197,7 +198,7 @@ def get_conv_outsize(model,in_size,in_channel):
 
 
 def add_csnn_block(
-        in_size,in_channel,out_channel,kernel,stride,padding,is_bias,is_bn,pool_type,dropout,
+        in_size,in_channel,out_channel,kernel,stride,padding,is_bias,is_bn,pool_type,pool_size,dropout,
         lif_dt,lif_init_tau,lif_min_tau,lif_threshold,lif_vrest,lif_reset_mechanism,lif_spike_grad,lif_output,is_train_tau
         ):
     """
@@ -236,9 +237,9 @@ def add_csnn_block(
         )
 
     if pool_type=="avg".casefold():
-        block.append(nn.AvgPool2d(2))
+        block.append(nn.AvgPool2d(pool_size))
     elif pool_type=="max".casefold():
-        block.append(nn.MaxPool2d(2))
+        block.append(nn.MaxPool2d(pool_size))
 
     #blockの出力サイズを計算
     block_outsize=get_conv_outsize(nn.Sequential(*block),in_size=in_size,in_channel=in_channel) #[1(batch) x channel x h x w]
@@ -270,6 +271,7 @@ class CSNN(SNN):
         self.out_size = conf["out-size"]
         self.hiddens = conf["hiddens"]
         self.pool_type = conf["pool-type"]
+        self.pool_size=conf["pool-size"]
         self.is_bn = conf["is-bn"]
         self.linear_hidden = conf["linear-hidden"]
         self.dropout = conf["dropout"]
@@ -291,12 +293,12 @@ class CSNN(SNN):
         #>> 畳み込み層 >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
         in_c=self.in_channel
         in_size=self.in_size
-        for hidden_c in self.hiddens:
+        for i,hidden_c in enumerate(self.hiddens):
 
             block,block_outsize=add_csnn_block(
                 in_size=in_size, in_channel=in_c, out_channel=hidden_c,
                 kernel=3, stride=1, padding=1,  # カーネルサイズ、ストライド、パディングの設定
-                is_bias=True, is_bn=self.is_bn, pool_type=self.pool_type, dropout=self.dropout,
+                is_bias=True, is_bn=self.is_bn, pool_type=self.pool_type, pool_size=self.pool_size[i] , dropout=self.dropout,
                 lif_dt=self.dt, lif_init_tau=self.init_tau, lif_min_tau=self.min_tau,
                 lif_threshold=self.v_threshold, lif_vrest=self.v_rest,
                 lif_reset_mechanism=self.reset_mechanism, lif_spike_grad=self.spike_grad,
@@ -329,3 +331,144 @@ class CSNN(SNN):
 
         self.model=nn.Sequential(*modules)
 
+
+def add_residual_block(
+        in_size,in_channel,out_channel,kernel,stride,padding,is_bias,residual_block_num,is_bn,pool_type,pool_size,dropout,
+        lif_dt,lif_init_tau,lif_min_tau,lif_threshold,lif_vrest,lif_reset_mechanism,lif_spike_grad,lif_output, is_train_tau
+        ):
+    """
+    param: in_size: 幅と高さ (正方形とする)
+    param: in_channel: channel size
+    param: out_channel: 出力チャネルのサイズ
+    param: kernel: カーネルサイズ
+    param: stride: ストライドのサイズ
+    param: padding: パディングのサイズ
+    param: is_bias: バイアスを使用するかどうか
+    param: residual_block_num: ResBlock内のCNNの数 (0でもいい)
+    param: is_bn: バッチ正規化を使用するかどうか
+    param: pool_type: プーリングの種類 ("avg"または"max")
+    param: pool_size: プールのサイズ
+    param: dropout: dropout rate
+    param: lif_dt: LIFモデルの時間刻み
+    param: lif_init_tau: LIFの初期時定数
+    param: lif_min_tau: LIFの最小時定数
+    param: lif_threshold: LIFの発火しきい値
+    param: lif_vrest: LIFの静止膜電位
+    param: lif_reset_mechanism: LIFの膜電位リセットメカニズム
+    param: lif_spike_grad: LIFのスパイク勾配関数
+    param: lif_output: LIFの出力を返すかどうか
+    param: is_train_tau: LIFのtauを学習するかどうか
+    """
+    
+    block=[]
+    block.append(
+        ResidualBlock(
+            in_channel=in_channel,out_channel=out_channel,
+            kernel=kernel,stride=stride,padding=padding,
+            num_block=residual_block_num,bias=is_bias
+        )
+    )
+
+    if is_bn:
+        block.append(
+            nn.BatchNorm2d(out_channel)
+        )
+
+    if pool_size>0:
+        if pool_type=="avg".casefold():
+            block.append(nn.AvgPool2d(pool_size))
+        elif pool_type=="max".casefold():
+            block.append(nn.MaxPool2d(pool_size))
+
+    #blockの出力サイズを計算
+    block_outsize=get_conv_outsize(nn.Sequential(*block),in_size=in_size,in_channel=in_channel) #[1(batch) x channel x h x w]
+
+    block.append(
+        LIF(
+            in_size=tuple(block_outsize[1:]), dt=lif_dt,
+            init_tau=lif_init_tau, min_tau=lif_min_tau,
+            threshold=lif_threshold, vrest=lif_vrest,
+            reset_mechanism=lif_reset_mechanism, spike_grad=lif_spike_grad,
+            output=lif_output, is_train_tau=is_train_tau
+        )
+    )
+
+    if dropout>0:
+        block.append(nn.Dropout2d(dropout, inplace=False))
+    
+    return block, block_outsize
+
+
+class ResCSNN(SNN):
+    """
+    CNNを残差にしたSNN
+    """
+    def __init__(self,conf):
+        super(ResCSNN,self).__init__(conf)
+
+        self.in_size = conf["in-size"]
+        self.in_channel = conf["in-channel"]
+        self.out_size = conf["out-size"]
+        self.hiddens = conf["hiddens"]
+        self.residual_blocks=conf["residual-block"] #残差ブロックごとのCNNの数
+        self.pool_type = conf["pool-type"]
+        self.pool_size=conf["pool-size"]
+        self.is_bn = conf["is-bn"]
+        self.linear_hidden = conf["linear-hidden"]
+        self.dropout = conf["dropout"]
+        
+        self.output_mem=conf["output-membrane"]
+        self.dt = conf["dt"]
+        self.init_tau = conf["init-tau"]
+        self.min_tau=conf["min-tau"]
+        self.is_train_tau=conf["train-tau"]
+        self.v_threshold = conf["v-threshold"]
+        self.v_rest = conf["v-rest"]
+        self.reset_mechanism = conf["reset-mechanism"]
+        if "fast".casefold() in conf["spike-grad"] and "sigmoid".casefold() in conf["spike-grad"]: 
+            self.spike_grad = surrogate.fast_sigmoid()
+
+        is_bias=True
+
+        modules=[]
+
+        #>> 畳み込み層 >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+        in_c=self.in_channel
+        in_size=self.in_size
+        for i,hidden_c in enumerate(self.hiddens):
+
+            block,block_outsize=add_residual_block(
+                in_size=in_size, in_channel=in_c, out_channel=hidden_c,
+                kernel=3, stride=1, padding=1,  # カーネルサイズ、ストライド、パディングの設定
+                is_bias=is_bias, residual_block_num=self.residual_blocks[i],
+                is_bn=self.is_bn, pool_type=self.pool_type,pool_size=self.pool_size[i],dropout=self.dropout,
+                lif_dt=self.dt, lif_init_tau=self.init_tau, lif_min_tau=self.min_tau,
+                lif_threshold=self.v_threshold, lif_vrest=self.v_rest,
+                lif_reset_mechanism=self.reset_mechanism, lif_spike_grad=self.spike_grad,
+                lif_output=False, is_train_tau=self.is_train_tau  # 出力を返さない設定
+            )
+            modules+=block
+            in_c=hidden_c
+            in_size=block_outsize[-1]
+        #<< 畳み込み層 <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+
+
+
+        #>> 線形層 >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+        modules+=[
+            nn.Flatten(),
+            nn.Linear(block_outsize[1]*block_outsize[2]*block_outsize[3],self.linear_hidden,bias=is_bias),
+            LIF(
+                in_size=(self.linear_hidden,),dt=self.dt,init_tau=self.init_tau, min_tau=self.min_tau,threshold=self.v_threshold,vrest=self.v_rest,
+                reset_mechanism=self.reset_mechanism,spike_grad=self.spike_grad,output=False,is_train_tau=self.is_train_tau
+            ),
+            nn.Linear(self.linear_hidden,self.out_size,bias=is_bias),
+            LIF(
+                in_size=(self.out_size,),dt=self.dt,init_tau=self.init_tau, min_tau=self.min_tau,threshold=self.v_threshold,vrest=self.v_rest,
+                reset_mechanism=self.reset_mechanism,spike_grad=self.spike_grad,output=True,is_train_tau=self.is_train_tau
+            ),
+        ]
+        #<< 線形層 <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+
+
+        self.model=nn.Sequential(*modules)

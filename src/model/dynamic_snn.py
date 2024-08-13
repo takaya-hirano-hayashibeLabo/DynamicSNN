@@ -4,6 +4,7 @@ from snntorch import surrogate
 from math import log
 from tqdm import tqdm
 
+from .residual_block import ResidualBlock
 from .scale_predictor import ScalePredictor
 
 class DynamicLIF(nn.Module):
@@ -17,7 +18,7 @@ class DynamicLIF(nn.Module):
         :param dt: LIFモデルを差分方程式にしたときの⊿t. 元の入力がスパイク時系列ならもとデータと同じ⊿t. 
         :param init_tau: 膜電位時定数τの初期値
         :param threshold: 発火しきい値
-        :param vrest: 静止膜電位. 計算がややこしくなるので0でいい気がする
+        :param vrest: 静止膜電位. 
         :paarm reset_mechanism: 発火後の膜電位のリセット方法の指定
         :param spike_grad: 発火勾配の近似関数
         """
@@ -89,8 +90,7 @@ class DynamicLIF(nn.Module):
 
 
     def init_voltage(self):
-        if not self.v is None:
-            self.v=0.0
+        self.v=0.0
 
 
 
@@ -289,7 +289,7 @@ def get_conv_outsize(model,in_size,in_channel):
 
 
 def add_csnn_block(
-        in_size,in_channel,out_channel,kernel,stride,padding,is_bias,is_bn,pool_type,dropout,
+        in_size,in_channel,out_channel,kernel,stride,padding,is_bias,is_bn,pool_type,pool_size,dropout,
         lif_dt,lif_init_tau,lif_min_tau,lif_threshold,lif_vrest,lif_reset_mechanism,lif_spike_grad,lif_output
         ):
     """
@@ -302,6 +302,7 @@ def add_csnn_block(
     param: is_bias: バイアスを使用するかどうか
     param: is_bn: バッチ正規化を使用するかどうか
     param: pool_type: プーリングの種類 ("avg"または"max")
+    param: pool_size: プールのサイズ
     param: dropout: dropout rate
     param: lif_dt: LIFモデルの時間刻み
     param: lif_init_tau: LIFの初期時定数
@@ -326,10 +327,11 @@ def add_csnn_block(
             nn.BatchNorm2d(out_channel)
         )
 
-    if pool_type=="avg".casefold():
-        block.append(nn.AvgPool2d(2))
-    elif pool_type=="max".casefold():
-        block.append(nn.MaxPool2d(2))
+    if pool_size>0:
+        if pool_type=="avg".casefold():
+            block.append(nn.AvgPool2d(pool_size))
+        elif pool_type=="max".casefold():
+            block.append(nn.MaxPool2d(pool_size))
 
     #blockの出力サイズを計算
     block_outsize=get_conv_outsize(nn.Sequential(*block),in_size=in_size,in_channel=in_channel) #[1(batch) x channel x h x w]
@@ -350,6 +352,7 @@ def add_csnn_block(
     return block, block_outsize
 
 
+
 class DynamicCSNN(DynamicSNN):
     """
     DynamicSNNのCNNバージョン 
@@ -364,6 +367,7 @@ class DynamicCSNN(DynamicSNN):
         self.out_size = conf["out-size"]
         self.hiddens = conf["hiddens"]
         self.pool_type = conf["pool-type"]
+        self.pool_size=conf["pool-size"]
         self.is_bn = conf["is-bn"]
         self.linear_hidden = conf["linear-hidden"]
         self.dropout = conf["dropout"]
@@ -385,12 +389,12 @@ class DynamicCSNN(DynamicSNN):
         #>> 畳み込み層 >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
         in_c=self.in_channel
         in_size=self.in_size
-        for hidden_c in self.hiddens:
+        for i,hidden_c in enumerate(self.hiddens):
 
             block,block_outsize=add_csnn_block(
                 in_size=in_size, in_channel=in_c, out_channel=hidden_c,
                 kernel=3, stride=1, padding=1,  # カーネルサイズ、ストライド、パディングの設定
-                is_bias=False, is_bn=self.is_bn, pool_type=self.pool_type, dropout=self.dropout,
+                is_bias=False, is_bn=self.is_bn, pool_type=self.pool_type,pool_size=self.pool_size[i],dropout=self.dropout,
                 lif_dt=self.dt, lif_init_tau=self.init_tau, lif_min_tau=self.min_tau,
                 lif_threshold=self.v_threshold, lif_vrest=self.v_rest,
                 lif_reset_mechanism=self.reset_mechanism, lif_spike_grad=self.spike_grad,
@@ -424,7 +428,153 @@ class DynamicCSNN(DynamicSNN):
 
 
 
+def add_residual_block(
+        in_size,in_channel,out_channel,kernel,stride,padding,is_bias,residual_block_num,is_bn,pool_type,pool_size,dropout,
+        lif_dt,lif_init_tau,lif_min_tau,lif_threshold,lif_vrest,lif_reset_mechanism,lif_spike_grad,lif_output
+        ):
+    """
+    param: in_size: 幅と高さ (正方形とする)
+    param: in_channel: channel size
+    param: out_channel: 出力チャネルのサイズ
+    param: kernel: カーネルサイズ
+    param: stride: ストライドのサイズ
+    param: padding: パディングのサイズ
+    param: is_bias: バイアスを使用するかどうか
+    param: residual_block_num: ResBlock内のCNNの数 (0でもいい)
+    param: is_bn: バッチ正規化を使用するかどうか
+    param: pool_type: プーリングの種類 ("avg"または"max")
+    param: pool_size: プールのサイズ
+    param: dropout: dropout rate
+    param: lif_dt: LIFモデルの時間刻み
+    param: lif_init_tau: LIFの初期時定数
+    param: lif_min_tau: LIFの最小時定数
+    param: lif_threshold: LIFの発火しきい値
+    param: lif_vrest: LIFの静止膜電位
+    param: lif_reset_mechanism: LIFの膜電位リセットメカニズム
+    param: lif_spike_grad: LIFのスパイク勾配関数
+    param: lif_output: LIFの出力を返すかどうか
+    """
     
+    block=[]
+    block.append(
+        ResidualBlock(
+            in_channel=in_channel,out_channel=out_channel,
+            kernel=kernel,stride=stride,padding=padding,
+            num_block=residual_block_num,bias=is_bias
+        )
+    )
+
+    if is_bn:
+        block.append(
+            nn.BatchNorm2d(out_channel)
+        )
+
+    if pool_size>0:
+        if pool_type=="avg".casefold():
+            block.append(nn.AvgPool2d(pool_size))
+        elif pool_type=="max".casefold():
+            block.append(nn.MaxPool2d(pool_size))
+
+    #blockの出力サイズを計算
+    block_outsize=get_conv_outsize(nn.Sequential(*block),in_size=in_size,in_channel=in_channel) #[1(batch) x channel x h x w]
+
+    block.append(
+        DynamicLIF(
+            in_size=tuple(block_outsize[1:]), dt=lif_dt,
+            init_tau=lif_init_tau, min_tau=lif_min_tau,
+            threshold=lif_threshold, vrest=lif_vrest,
+            reset_mechanism=lif_reset_mechanism, spike_grad=lif_spike_grad,
+            output=lif_output
+        )
+    )
+
+    if dropout>0:
+        block.append(nn.Dropout2d(dropout, inplace=False))
+    
+    return block, block_outsize
+
+
+class DynamicResCSNN(DynamicSNN):
+    """
+    DynamicSNNのCNNバージョン 
+    さらにCNNをResNetにすることで,深いネットワークの生成も可能にした
+    """
+
+    def __init__(self,conf):
+        super(DynamicResCSNN,self).__init__(conf)
+
+        self.in_size = conf["in-size"]
+        self.in_channel = conf["in-channel"]
+        self.out_size = conf["out-size"]
+        self.hiddens = conf["hiddens"]
+        self.residual_blocks=conf["residual-block"] #残差ブロックごとのCNNの数
+        self.pool_type = conf["pool-type"]
+        self.pool_size=conf["pool-size"]
+        self.is_bn = conf["is-bn"]
+        self.linear_hidden = conf["linear-hidden"] if isinstance(conf["linear-hidden"],list) else [conf["linear-hidden"]]
+        self.dropout = conf["dropout"]
+        
+        self.output_mem=conf["output-membrane"]
+        self.dt = conf["dt"]
+        self.init_tau = conf["init-tau"]
+        self.min_tau=conf["min-tau"]
+        self.v_threshold = conf["v-threshold"]
+        self.v_rest = conf["v-rest"]
+        self.reset_mechanism = conf["reset-mechanism"]
+        if "fast".casefold() in conf["spike-grad"] and "sigmoid".casefold() in conf["spike-grad"]: 
+            self.spike_grad = surrogate.fast_sigmoid()
+
+        is_bias=False #基本falseじゃないとラプラス変換の関係式が成り立たない
+
+
+        modules=[]
+
+        #>> 畳み込み層 >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+        in_c=self.in_channel
+        in_size=self.in_size
+        for i,hidden_c in enumerate(self.hiddens):
+
+            block,block_outsize=add_residual_block(
+                in_size=in_size, in_channel=in_c, out_channel=hidden_c,
+                kernel=3, stride=1, padding=1,  # カーネルサイズ、ストライド、パディングの設定
+                is_bias=is_bias, residual_block_num=self.residual_blocks[i],
+                is_bn=self.is_bn, pool_type=self.pool_type,pool_size=self.pool_size[i],dropout=self.dropout,
+                lif_dt=self.dt, lif_init_tau=self.init_tau, lif_min_tau=self.min_tau,
+                lif_threshold=self.v_threshold, lif_vrest=self.v_rest,
+                lif_reset_mechanism=self.reset_mechanism, lif_spike_grad=self.spike_grad,
+                lif_output=False  # 出力を返さない設定
+            )
+            modules+=block
+            in_c=hidden_c
+            in_size=block_outsize[-1]
+        #<< 畳み込み層 <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+
+
+
+        #>> 線形層 >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+        modules+=[nn.Flatten()]
+        in_size=block_outsize[1]*block_outsize[2]*block_outsize[3]
+        for h in self.linear_hidden:
+            modules+=[
+                nn.Linear(in_size,h,bias=is_bias),
+                DynamicLIF(
+                    in_size=(h,),dt=self.dt,init_tau=self.init_tau, min_tau=self.min_tau,threshold=self.v_threshold,vrest=self.v_rest,
+                    reset_mechanism=self.reset_mechanism,spike_grad=self.spike_grad,output=False
+                ),
+            ]
+            in_size=h
+        modules+=[
+            nn.Linear(in_size,self.out_size,bias=is_bias),
+            DynamicLIF(
+                in_size=(self.out_size,),dt=self.dt,init_tau=self.init_tau, min_tau=self.min_tau,threshold=self.v_threshold,vrest=self.v_rest,
+                reset_mechanism=self.reset_mechanism,spike_grad=self.spike_grad,output=True
+            ),
+        ]
+        #<< 線形層 <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+
+
+        self.model=nn.Sequential(*modules)
+
 
 if __name__=="__main__":
     """

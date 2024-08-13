@@ -25,7 +25,7 @@ from src.model import DiffEncoder, DirectCSNNEncoder
 
 
 
-def plot_results(s_ideal,s_real ,filename):
+def plot_results(s_ideal, s_real ,filename):
 
     plt.figure(figsize=(12, 4))
     T=s_ideal.shape[0]

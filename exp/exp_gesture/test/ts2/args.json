@@ -1,0 +1,7 @@
+{
+    "target": "/mnt/ssd1/hiranotakaya/master/dev/workspace/prj_202409_2MR/laplace-version/train/output/0812/gesture/v4.0/dyna-snn-in32-out8-noSchedule",
+    "device": "0",
+    "time_scale": 2,
+    "saveto": "test",
+    "model_name": "model_final.pth"
+}

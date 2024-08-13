@@ -1,0 +1,36 @@
+train:
+  batch: 20
+  epoch: 100
+  iter: 20 #ここは-1にするとmaxまで. とりあえず20くらいでいい
+  lr: 0.0005
+  save_interval: 10 #epochごと
+  datatype: gesture
+  time-window: 30000 #μs (=30ms =0.03s)
+  pool-size: -1 #transformのpooling size. 0以下にするとpoolingがなしになる
+  pool-type: avg #transformのpooling type
+  schedule-step: -1 #-1でscheduleなし
+  schedule-rate: 0.1
+
+model:
+  type: dynamic-snn
+
+  in-size: 128
+  in-channel: 2 
+  out-size: 11
+  hiddens: [8,8,12,12,16,16,20,32,64] #深くするほうが非線形さが増して性能が上がりやすい
+  pool-type: max
+  pool-size: [2,-1,2,-1,2,-1,2,2,2]
+  is-bn: false #batch normalizationするかどうか. 基本なし. ラプラス変換から, あるとテスト時に上手くいかない
+
+  linear-hidden: 256
+
+  dropout: 0.3
+
+  dt: 0.03 #s
+  init-tau: 0.3 #dt/tauが1を超えないようにする.
+  min-tau: 0.05
+  v-threshold: 0.1 #発火閾値をちょい上げる
+  v-rest: 0.0
+  reset-mechanism: zero
+  spike-grad: fast-sigmoid
+  output-membrane: false

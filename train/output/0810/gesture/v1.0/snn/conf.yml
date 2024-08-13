@@ -1,0 +1,35 @@
+train:
+  batch: 40
+  epoch: 100
+  iter: -1 #ここは-1にするとmaxまで
+  lr: 0.001
+  save_interval: 10 #epochごと
+  datatype: gesture
+  time-window: 30000 #μs (=30ms =0.03s)
+  pool-size: -1 #transformのpooling size. 0以下にするとpoolingがなしになる
+  pool-type: avg #transformのpooling type
+
+model:
+  type: snn
+
+  in-size: 128
+  in-channel: 2 
+  out-size: 11
+  hiddens: [12,32,64]
+  pool-type: max
+  pool-size: 4
+  is-bn: false #batch normalizationするかどうか. 基本なし. ラプラス変換からあると上手くいかない
+
+  linear-hidden: 256
+
+  dropout: 0.2
+
+  dt: 0.03 #s
+  init-tau: 0.3 #dt/tauが1を超えないようにする.
+  min-tau: 0.05
+  train-tau: false
+  v-threshold: 0.01
+  v-rest: 0.0
+  reset-mechanism: zero
+  spike-grad: fast-sigmoid
+  output-membrane: false

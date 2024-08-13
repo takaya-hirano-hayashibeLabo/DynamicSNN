@@ -23,6 +23,47 @@ def save_to_hdf5(file_path, data, target):
         f.create_dataset('target', data=target)
 
 
+def change_resolution_v2(events: np.ndarray, resolution):
+    """
+    :param events: [event_num x (x,y,t,p)]
+    """
+    t_start = events[0]["t"]
+    t_end = events[-1]["t"]
+    event_length = ceil((t_end - t_start) / resolution)
+
+    new_events = []
+
+    for i in tqdm(range(event_length)):
+        t_window_start = t_start + i * resolution
+        t_window_end = t_window_start + resolution
+        events_i = events[(t_window_start <= events["t"]) & (events["t"] < t_window_end)]
+
+        if len(events_i) == 0:
+            continue
+
+        for polarity in [True, False]:
+            events_polarity = events_i[events_i["p"] == polarity]
+            if len(events_polarity) > 0:
+                xy = list({(event["x"], event["y"]) for event in events_polarity})
+
+                new_events += [
+                    (e_xy[0], e_xy[1], polarity, int((t_window_start + t_window_end) / 2))
+                    for e_xy in xy
+                ]
+
+    dtype = np.dtype([('x', '<i8'), ('y', '<i8'), ('p', '<i8'), ('t', '<i8')])
+    new_events = np.array(new_events, dtype=dtype)
+
+    # print("original events shape: ", events.shape)
+    # print(events[:10])
+    # print("new events shape: ", new_events.shape)
+    # print(new_events[:10])
+
+    return new_events
+
+
+
+
 def process_window(events, t_window_start, t_window_end, resolution):
     events_i = events[(t_window_start <= events["t"]) & (events["t"] < t_window_end)]
     new_events_i = []
@@ -33,9 +74,12 @@ def process_window(events, t_window_start, t_window_end, resolution):
     for polarity in [True, False]:
         events_polarity = events_i[events_i["p"] == polarity]
         if len(events_polarity) > 0:
-            x_mean = int(np.mean(events_polarity["x"]))
-            y_mean = int(np.mean(events_polarity["y"]))
-            new_events_i.append((x_mean, y_mean, polarity, int(t_window_start + resolution / 2)))
+            xy = list({(event["x"], event["y"]) for event in events_polarity})
+
+            new_events_i += [
+                (e_xy[0], e_xy[1], polarity, int((t_window_start + t_window_end) / 2))
+                for e_xy in xy
+            ]
 
     return new_events_i
 
@@ -84,10 +128,10 @@ def change_resolution(events: np.ndarray, resolution, num_workers=64):
     # tを基準にソート
     new_events.sort(order='t')
 
-    # print("original events shape: ", events.shape)
-    # print(events[:20])
-    # print("new events shape: ", new_events.shape)
-    # print(new_events[:20])
+    print("original events shape: ", events.shape)
+    print(events[:5])
+    print("new events shape: ", new_events.shape)
+    print(new_events[:5])
 
     return new_events
 
@@ -117,27 +161,28 @@ def main():
         print(f"[{i+1}/{len(trainset)}]")
         events = trainset[i][0]
         new_events = change_resolution(events, args.resolution,args.num_worker)
+        # new_events = change_resolution_v2(events, args.resolution)
 
         save_to_hdf5(
             event_savepath/f"train/data{i}.h5",new_events,trainset[i][1]
         )
 
-        if i==i_max:
+        if i_max>0 and i==i_max:
             break
     print("\033[92mdone\033[0m\n")
-
 
     print("generate test data...")
     for i in range(len(testset)):
         print(f"[{i+1}/{len(testset)}]")
         events = testset[i][0]
         new_events = change_resolution(events, args.resolution,args.num_worker)
+        # new_events = change_resolution_v2(events, args.resolution)
 
         save_to_hdf5(
             event_savepath/f"test/data{i}.h5",new_events,testset[i][1]
         )
 
-        if i==i_max:
+        if i_max>0 and i==i_max:
             break
     print("\033[92mdone\033[0m")
 
