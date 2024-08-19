@@ -1,0 +1,37 @@
+train:
+  batch: 64
+  epoch: 400
+  iter: -1 #ここは-1にするとmaxまで. とりあえず20くらいでいい
+  lr: 0.0005
+  save_interval: 20 #epochごと
+  datatype: gesture
+  time-window: 30000 #μs (=30ms =0.03s)
+  schedule-step: -1 #-1でscheduleなし
+  schedule-rate: 0.5
+
+model:
+  type: snn
+  cnn-type: res #resで残差ブロックCNNになる
+
+  in-size: 32
+  in-channel: 2 
+  out-size: 11
+  hiddens: [12,32] 
+  pool-type: avg
+  pool-size: [2,2]
+  residual-block: [3,3] #2にするとresidual blockあたり1+2層のCNNが積まれる
+  is-bn: true #batch normalizationするかどうか. 
+
+  linear-hidden: 512
+
+  dropout: 0.5
+
+  dt: 0.03 #s
+  init-tau: 0.06 #dt/tauが1を超えないようにする.
+  min-tau: 0.04
+  train-tau: true
+  v-threshold: 0.1
+  v-rest: 0.0
+  reset-mechanism: zero
+  spike-grad: fast-sigmoid
+  output-membrane: false

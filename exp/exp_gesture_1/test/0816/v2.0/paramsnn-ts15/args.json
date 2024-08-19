@@ -1,0 +1,8 @@
+{
+    "target": "/mnt/ssd1/hiranotakaya/master/dev/workspace/prj_202409_2MR/laplace-version/train/output/0816/gesture/v1.1/paramsnn-tau_middle",
+    "device": 0,
+    "timescale": 15,
+    "saveto": "test/0816/v2.0/paramsnn-ts15",
+    "modelname": "model_best.pth",
+    "is_video": false
+}

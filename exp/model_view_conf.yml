@@ -1,0 +1,27 @@
+figsize: [8,8]
+legend:
+  fontsize: 11
+plot:
+  markersize: 7
+labelsize: 14
+
+color-map: viridis
+  
+model-color:
+  alpha: 0.85
+  dynamic-snn: 1.0
+  param-snn: 0.66
+  snn: 0.33
+  lstm: 0.0
+
+model-label:
+  dynamic-snn: proposal
+  param-snn: param-snn
+  snn: snn
+  lstm: lstm
+
+
+marker:
+  middle: "x"
+  large: "o"
+  small: "^"

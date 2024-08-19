@@ -1,0 +1,7 @@
+{
+    "model": "lstm",
+    "datatype": "gesture",
+    "delay": 5000,
+    "acc_mean": 0.4485294117647059,
+    "acc_std": 0.08367504909368413
+}

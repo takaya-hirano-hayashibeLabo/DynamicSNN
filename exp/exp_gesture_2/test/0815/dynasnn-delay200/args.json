@@ -1,0 +1,7 @@
+{
+    "target": "/mnt/ssd1/hiranotakaya/master/dev/workspace/prj_202409_2MR/laplace-version/train/output/0814/gesture/v1.0/dyna-snn-b2",
+    "device": "0",
+    "delay": 200,
+    "saveto": "test/0815/dynasnn-delay200",
+    "model_name": "model_epoch_100"
+}

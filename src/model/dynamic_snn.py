@@ -4,93 +4,9 @@ from snntorch import surrogate
 from math import log
 from tqdm import tqdm
 
-from .residual_block import ResidualBlock
+from .residual_block import ResidualBlock, ResidualDynaLIFBlock
 from .scale_predictor import ScalePredictor
-
-class DynamicLIF(nn.Module):
-    """
-    動的にtime constant(TC)が変動するLIF
-    """
-
-    def __init__(self,in_size:tuple,dt,init_tau=0.5,min_tau=0.1,threshold=1.0,vrest=0,reset_mechanism="zero",spike_grad=surrogate.fast_sigmoid(),output=False):
-        """
-        :param in_size: currentの入力サイズ
-        :param dt: LIFモデルを差分方程式にしたときの⊿t. 元の入力がスパイク時系列ならもとデータと同じ⊿t. 
-        :param init_tau: 膜電位時定数τの初期値
-        :param threshold: 発火しきい値
-        :param vrest: 静止膜電位. 
-        :paarm reset_mechanism: 発火後の膜電位のリセット方法の指定
-        :param spike_grad: 発火勾配の近似関数
-        """
-        super(DynamicLIF, self).__init__()
-
-        self.dt=dt
-        self.init_tau=init_tau
-        self.min_tau=min_tau
-        self.threshold=threshold
-        self.vrest=vrest
-        self.reset_mechanism=reset_mechanism
-        self.spike_grad=spike_grad
-        self.output=output
-
-        #>> tauを学習可能にするための調整 >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-        # 参考 [https://github.com/fangwei123456/Parametric-Leaky-Integrate-and-Fire-Spiking-Neuron/blob/main/codes/models.py]
-        init_w=-log(1/(self.init_tau-min_tau)-1)
-        self.w=nn.Parameter(init_w * torch.ones(size=in_size))  # デフォルトの初期化
-        #<< tauを学習可能にするための調整 <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-
-        self.v=0.0
-        self.r=1.0 #膜抵抗
-        self.a=1.0 #タイムスケール
-
-
-    def forward(self,current:torch.Tensor):
-        """
-        :param current: シナプス電流 [batch x ...]
-        """
-
-
-        # if torch.max(self.tau)<self.dt: #dt/tauが1を超えないようにする
-        #     dtau=(self.tau<self.dt)*self.dt
-        #     self.tau=self.tau-dtau
-
-        # #shape debugging
-        # try:
-        #     print(f"tau:{self.w.shape}, v:{self.v.shape if not self.v==0.0 else 0}, current:{current.shape}")
-        #     # print(self.w)
-        #     # print(self.v)
-        #     print("--------------")
-        # except:
-        #     pass
-
-        tau=self.min_tau+self.w.sigmoid() #tauが小さくなりすぎるとdt/tauが1を超えてしまう
-        dv=self.dt/(tau*self.a) * ( -(self.v-self.vrest) + (self.a*self.r)*current ) #膜電位vの増分
-        self.v=self.v+dv
-        spike=self.__fire()
-        v_tmp=self.v #リセット前の膜電位
-        self.__reset_voltage(spike)
-
-        if not self.output:
-            return spike
-        else:
-            return spike, v_tmp
-
-
-    def __fire(self):
-        v_shift=self.v-self.threshold
-        spike=self.spike_grad(v_shift)
-        return spike
-    
-
-    def __reset_voltage(self,spike):
-        if self.reset_mechanism=="zero":
-            self.v=self.v*(1-spike.float())
-        elif self.reset_mechanism=="subtract":
-            self.v=self.v-self.threshold
-
-
-    def init_voltage(self):
-        self.v=0.0
+from .lif_model import DynamicLIF
 
 
 
@@ -161,7 +77,7 @@ class DynamicSNN(nn.Module):
 
     def __init_lif(self):
         for layer in self.model:
-            if isinstance(layer,DynamicLIF):
+            if isinstance(layer,DynamicLIF) or isinstance(layer,ResidualDynaLIFBlock):
                 layer.init_voltage()
 
 
@@ -171,15 +87,40 @@ class DynamicSNN(nn.Module):
         :param a: [スカラ]その瞬間の時間スケール
         """
         for layer in self.model:
-            if isinstance(layer,DynamicLIF): #ラプラス変換によると時間スケールをかけると上手く行くはず
+            if isinstance(layer,DynamicLIF):  #ラプラス変換によると時間スケールをかけると上手く行くはず
                 layer.a = a
+            elif  isinstance(layer,ResidualDynaLIFBlock):
+                layer.set_dynamic_params(a)
 
 
     def __reset_params(self):
         for layer in self.model:
             if isinstance(layer,DynamicLIF):
                 layer.a=1.0
+            elif isinstance(layer,ResidualDynaLIFBlock):
+                layer.reset_params()
 
+
+    def get_tau(self):
+        """
+        tauを取得するだけ
+        :return <dict>tau: {layer-name: tau}
+        """
+
+        taus={}
+        layer_num=0
+        for layer in self.model:
+            if isinstance(layer,DynamicLIF):
+                with torch.no_grad():
+                    tau=layer.min_tau + layer.w.sigmoid()
+                    # print(f"layer: {layer._get_name()}-layer{layer_num}, tau shape: {tau.shape}")
+                    taus["DynamicLIF"]=tau
+                    layer_num+=1
+
+            elif isinstance(layer,ResidualDynaLIFBlock):
+                taus=taus | layer.get_tau()
+
+        return taus
 
 
     def forward(self,s:torch.Tensor):
@@ -225,6 +166,7 @@ class DynamicSNN(nn.Module):
 
             with torch.no_grad():
                 a=scale_predictor.predict_scale(s[t]) #現在のscaleを予測
+                # print(f"time step: {t}, predicted scale: {a}")
                 self.__set_dynamic_params(a)
                 st,vt=self.model(s[t])
 
@@ -290,7 +232,7 @@ def get_conv_outsize(model,in_size,in_channel):
 
 def add_csnn_block(
         in_size,in_channel,out_channel,kernel,stride,padding,is_bias,is_bn,pool_type,pool_size,dropout,
-        lif_dt,lif_init_tau,lif_min_tau,lif_threshold,lif_vrest,lif_reset_mechanism,lif_spike_grad,lif_output
+        lif_dt,lif_init_tau,lif_min_tau,lif_threshold,lif_vrest,lif_reset_mechanism,lif_spike_grad,lif_output,
         ):
     """
     param: in_size: 幅と高さ (正方形とする)
@@ -430,7 +372,8 @@ class DynamicCSNN(DynamicSNN):
 
 def add_residual_block(
         in_size,in_channel,out_channel,kernel,stride,padding,is_bias,residual_block_num,is_bn,pool_type,pool_size,dropout,
-        lif_dt,lif_init_tau,lif_min_tau,lif_threshold,lif_vrest,lif_reset_mechanism,lif_spike_grad,lif_output
+        lif_dt,lif_init_tau,lif_min_tau,lif_threshold,lif_vrest,lif_reset_mechanism,lif_spike_grad,lif_output,
+        res_actfn="relu"
         ):
     """
     param: in_size: 幅と高さ (正方形とする)
@@ -453,16 +396,32 @@ def add_residual_block(
     param: lif_reset_mechanism: LIFの膜電位リセットメカニズム
     param: lif_spike_grad: LIFのスパイク勾配関数
     param: lif_output: LIFの出力を返すかどうか
+    param: res_actfn: 残差ブロックの活性化関数
     """
     
     block=[]
-    block.append(
-        ResidualBlock(
-            in_channel=in_channel,out_channel=out_channel,
-            kernel=kernel,stride=stride,padding=padding,
-            num_block=residual_block_num,bias=is_bias
+
+    if res_actfn=="relu":
+        block.append(
+            ResidualBlock(
+                in_channel=in_channel,out_channel=out_channel,
+                kernel=kernel,stride=stride,padding=padding,
+                num_block=residual_block_num,bias=is_bias
+            )
         )
-    )
+    elif res_actfn=="dyna-snn":
+        block.append(
+            ResidualDynaLIFBlock(
+                in_channel=in_channel,out_channel=out_channel,
+                kernel=kernel,stride=stride,padding=padding,
+                num_block=residual_block_num,bias=is_bias,
+                in_size=in_size, dt=lif_dt,
+                init_tau=lif_init_tau, min_tau=lif_min_tau,
+                threshold=lif_threshold, vrest=lif_vrest,
+                reset_mechanism=lif_reset_mechanism, spike_grad=surrogate.fast_sigmoid(),
+                output=False
+            )
+        )
 
     if is_bn:
         block.append(
@@ -500,7 +459,7 @@ class DynamicResCSNN(DynamicSNN):
     さらにCNNをResNetにすることで,深いネットワークの生成も可能にした
     """
 
-    def __init__(self,conf):
+    def __init__(self,conf:dict):
         super(DynamicResCSNN,self).__init__(conf)
 
         self.in_size = conf["in-size"]
@@ -513,6 +472,7 @@ class DynamicResCSNN(DynamicSNN):
         self.is_bn = conf["is-bn"]
         self.linear_hidden = conf["linear-hidden"] if isinstance(conf["linear-hidden"],list) else [conf["linear-hidden"]]
         self.dropout = conf["dropout"]
+        self.res_actfn=conf["res-actfn"] if "res-actfn" in conf.keys() else "relu"
         
         self.output_mem=conf["output-membrane"]
         self.dt = conf["dt"]
@@ -542,7 +502,8 @@ class DynamicResCSNN(DynamicSNN):
                 lif_dt=self.dt, lif_init_tau=self.init_tau, lif_min_tau=self.min_tau,
                 lif_threshold=self.v_threshold, lif_vrest=self.v_rest,
                 lif_reset_mechanism=self.reset_mechanism, lif_spike_grad=self.spike_grad,
-                lif_output=False  # 出力を返さない設定
+                lif_output=False,  # 出力を返さない設定
+                res_actfn=self.res_actfn
             )
             modules+=block
             in_c=hidden_c
@@ -574,6 +535,11 @@ class DynamicResCSNN(DynamicSNN):
 
 
         self.model=nn.Sequential(*modules)
+
+
+
+
+
 
 
 if __name__=="__main__":

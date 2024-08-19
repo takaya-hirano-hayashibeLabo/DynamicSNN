@@ -78,6 +78,14 @@ def save_dict2json(data, saveto):
         json.dump(data, json_file, indent=4, ensure_ascii=False)
 
 
+def load_json2dict(file_path):
+    """JSONファイルをdictとしてロードする関数"""
+    import json
+    with open(file_path, 'r', encoding='utf-8') as f:
+        data = json.load(f)
+    return data
+
+
 def resample_scale(a: list, target_length: int) -> list:
     """
     1次元のリストを指定した長さにリサンプリングする関数
@@ -236,11 +244,15 @@ def save_heatmap_video(frames, output_path, file_name, fps=30, scale=5):
     tmpout = str(output_path / "tmp.avi")
     video = cv2.VideoWriter(tmpout, fourcc, fps, (new_width, new_height), isColor=True)
 
-    for frame in frames:
+    for i, frame in enumerate(frames):
         # Normalize frame to range [0, 255] with original range [-1, 1]
         normalized_frame = ((frame + 1) / 2 * 255).astype(np.uint8)
         heatmap = cv2.applyColorMap(normalized_frame, cv2.COLORMAP_JET)
         resized_heatmap = cv2.resize(heatmap, (new_width, new_height))
+
+        # Add frame number text
+        cv2.putText(resized_heatmap, f"Frame: {i+1}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
+
         video.write(resized_heatmap)
 
     video.release()

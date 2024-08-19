@@ -1,0 +1,7 @@
+{
+    "target": "/mnt/ssd1/hiranotakaya/master/dev/workspace/prj_202409_2MR/laplace-version/train/output/0813/gesture/v1.2/param-snn-bn-b2",
+    "device": "7",
+    "time_scale": 20,
+    "saveto": "test/0815/paramsnn-ts20",
+    "model_name": "model_final.pth"
+}

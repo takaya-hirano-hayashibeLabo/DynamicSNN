@@ -22,6 +22,8 @@ class ScalePredictor():
         scale=1
         if self.datatype=="xor":
             scale=self.__predict_xor(data)
+        if self.datatype=="gesture":
+            scale=self.__predict_gesture(data)
 
         return scale
 
@@ -37,6 +39,29 @@ class ScalePredictor():
         slope,intercept=-1.0437631068421338,-0.6790105922709921
         #<< scaleとfiring rateで線形回帰したときの係数とwindow <<<<<<<<
         
+        self.data_trj=torch.cat([self.data_trj.to(data.device),data.unsqueeze(1)],dim=1)
+        if self.data_trj.shape[1]>window_size:
+            self.data_trj=self.data_trj[:,(self.data_trj.shape[1]-window_size):] #長くなりすぎたらカット
+        
+        scale_log=log(self.firing_rate+1e-10)*slope + intercept
+        scale=exp(scale_log)
+
+        return scale
+    
+
+    def __predict_gesture(self,data:torch.Tensor):
+        """
+        テスト済み. 想定した通りの挙動をしている
+        gestureの1ステップ分のデータが入る
+        :param data: [batch x channel x w x h]
+        """
+
+        #>> 線形回帰したときのパラメータ >>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+        window_size=100
+        slope=-1.3015304644834496
+        intercept=-4.641658840504729
+        #<< 線形回帰したときのパラメータ <<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+
         self.data_trj=torch.cat([self.data_trj.to(data.device),data.unsqueeze(1)],dim=1)
         if self.data_trj.shape[1]>window_size:
             self.data_trj=self.data_trj[:,(self.data_trj.shape[1]-window_size):] #長くなりすぎたらカット

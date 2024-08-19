@@ -19,7 +19,7 @@ from torch.nn.utils.rnn import pad_sequence
 import matplotlib.pyplot as plt
 
 
-from src.utils import load_yaml,print_terminal,calculate_accuracy,Pool2DTransform
+from src.utils import load_yaml,print_terminal,calculate_accuracy,Pool2DTransform,save_dict2json
 from src.model import DynamicCSNN,CSNN,DynamicResCSNN, ResCSNN, ResNetLSTM
 
 
@@ -86,6 +86,7 @@ def main():
     iter_max=train_conf["iter"]
     save_interval=train_conf["save_interval"]
     minibatch=train_conf["batch"]
+    sequence=train_conf["sequence"] #時系列のタイムシーケンス
     #<< configの準備 <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 
 
@@ -151,6 +152,7 @@ def main():
 
     #>> 学習ループ >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
     result=[]
+    best_score={"mean":0.0, "std":0.0}
     for e in range(epoch):
 
         model.train()
@@ -160,6 +162,10 @@ def main():
         for batch_idx, (inputs, targets) in enumerate(train_loader):
             inputs, targets = inputs.to(device).permute((1,0,*[i+2 for i in range(inputs.ndim-2)])).to(torch.float), targets.to(device)
             inputs[inputs>0]=1.0
+
+            if sequence>0 and inputs.shape[0]>sequence: #configでシーケンスが指定された場合はその長さに切り取る
+                inputs=inputs[:sequence]
+
             outputs = model.forward(inputs)
             loss:torch.Tensor = criterion(outputs, targets)
             loss.backward()
@@ -207,12 +213,24 @@ def main():
             for inputs, targets in test_loader:
                 inputs, targets = inputs.to(device).permute((1,0,*[i+2 for i in range(inputs.ndim-2)])).to(torch.float), targets.to(device)
                 inputs[inputs>0]=1.0
+
+                if sequence>0 and inputs.shape[0]>sequence: #configでシーケンスが指定された場合はその長さに切り取る
+                    inputs=inputs[:sequence]
+                
                 outputs = model(inputs)
                 val_loss.append(criterion(outputs, targets).item())
                 if "snn".casefold() in model_conf["type"]:
                     test_acc_list.append(SF.accuracy_rate(outputs,targets))
                 else:
                     test_acc_list.append(calculate_accuracy(outputs,targets))
+
+
+            acc_mean,acc_std=np.mean(test_acc_list),np.std(test_acc_list)
+            if acc_mean>best_score["mean"]: #テスト最高スコアのモデルを保存
+                best_score["mean"]=acc_mean
+                best_score["std"]=acc_std
+                save_dict2json(best_score,resultpath/f"best-score.json")
+                torch.save(model.state_dict(),resultpath/f"model_best.pth")
 
             print(f"Validation Loss after Epoch [{e+1}/{epoch}]: {np.mean(val_loss):.4f}")
 

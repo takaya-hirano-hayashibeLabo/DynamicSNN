@@ -3,91 +3,8 @@ import torch.nn as nn
 from snntorch import surrogate
 from math import log
 
-from .residual_block import ResidualBlock
-
-class LIF(nn.Module):
-    def __init__(self,in_size:tuple,dt,init_tau=0.5,min_tau=0.1,threshold=1.0,vrest=0,reset_mechanism="zero",spike_grad=surrogate.fast_sigmoid(),output=False,is_train_tau=True):
-        """
-        :param in_size: currentの入力サイズ
-        :param dt: LIFモデルを差分方程式にしたときの⊿t. 元の入力がスパイク時系列ならもとデータと同じ⊿t. 
-        :param init_tau: 膜電位時定数τの初期値
-        :param threshold: 発火しきい値
-        :param vrest: 静止膜電位. 
-        :paarm reset_mechanism: 発火後の膜電位のリセット方法の指定
-        :param spike_grad: 発火勾配の近似関数
-        """
-        super(LIF, self).__init__()
-
-        self.dt=dt
-        self.init_tau=init_tau
-        self.min_tau=min_tau
-        self.threshold=threshold
-        self.vrest=vrest
-        self.reset_mechanism=reset_mechanism
-        self.spike_grad=spike_grad
-        self.output=output
-
-        #>> tauを学習可能にするための調整 >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-        # 参考 [https://github.com/fangwei123456/Parametric-Leaky-Integrate-and-Fire-Spiking-Neuron/blob/main/codes/models.py]
-        self.is_train_tau=is_train_tau
-        init_w=-log(1/(self.init_tau-min_tau)-1)
-        if is_train_tau:
-            self.w=nn.Parameter(init_w * torch.ones(size=in_size))  # デフォルトの初期化
-        elif not is_train_tau:
-            self.w=(init_w * torch.ones(size=in_size))  # デフォルトの初期化
-        #<< tauを学習可能にするための調整 <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-
-        self.v=0.0
-        self.r=1.0 #膜抵抗
-
-
-    def forward(self,current:torch.Tensor):
-        """
-        :param current: シナプス電流 [batch x ...]
-        """
-
-
-        # if torch.max(self.tau)<self.dt: #dt/tauが1を超えないようにする
-        #     dtau=(self.tau<self.dt)*self.dt
-        #     self.tau=self.tau-dtau
-
-        # print(f"tau:{self.tau.shape}, v:{self.v.shape}, current:{current.shape}")
-        # print(self.tau)
-        # print(self.v)
-        # print("--------------")
-        if not self.is_train_tau:
-            self.w=self.w.to(current.device)
-
-        tau=self.min_tau+self.w.sigmoid() #tauが小さくなりすぎるとdt/tauが1を超えてしまう
-        dv=self.dt/(tau) * ( -(self.v-self.vrest) + (self.r)*current ) #膜電位vの増分
-        self.v=self.v+dv
-        spike=self.__fire()
-        v_tmp=self.v #リセット前の膜電位
-        self.__reset_voltage(spike)
-
-        if not self.output:
-            return spike
-        else:
-            return spike, v_tmp
-
-
-    def __fire(self):
-        v_shift=self.v-self.threshold
-        spike=self.spike_grad(v_shift)
-        return spike
-    
-
-    def __reset_voltage(self,spike):
-        if self.reset_mechanism=="zero":
-            self.v=self.v*(1-spike.float())
-        elif self.reset_mechanism=="subtract":
-            self.v=self.v-self.threshold
-
-
-    def init_voltage(self):
-        if not self.v is None:
-            self.v=0.0
-
+from .residual_block import ResidualBlock, ResidualLIFBlock
+from .lif_model import LIF
 
 
 class SNN(nn.Module):
@@ -158,7 +75,7 @@ class SNN(nn.Module):
 
     def __init_lif(self):
         for layer in self.model:
-            if isinstance(layer,LIF):
+            if isinstance(layer,LIF) or isinstance(layer,ResidualLIFBlock):
                 layer.init_voltage()
 
 
@@ -334,7 +251,8 @@ class CSNN(SNN):
 
 def add_residual_block(
         in_size,in_channel,out_channel,kernel,stride,padding,is_bias,residual_block_num,is_bn,pool_type,pool_size,dropout,
-        lif_dt,lif_init_tau,lif_min_tau,lif_threshold,lif_vrest,lif_reset_mechanism,lif_spike_grad,lif_output, is_train_tau
+        lif_dt,lif_init_tau,lif_min_tau,lif_threshold,lif_vrest,lif_reset_mechanism,lif_spike_grad,lif_output, is_train_tau,
+        res_actfn
         ):
     """
     param: in_size: 幅と高さ (正方形とする)
@@ -358,16 +276,31 @@ def add_residual_block(
     param: lif_spike_grad: LIFのスパイク勾配関数
     param: lif_output: LIFの出力を返すかどうか
     param: is_train_tau: LIFのtauを学習するかどうか
+    param: res_actfn: 残差ブロックの活性化関数 {relu, lif}
     """
     
     block=[]
-    block.append(
-        ResidualBlock(
-            in_channel=in_channel,out_channel=out_channel,
-            kernel=kernel,stride=stride,padding=padding,
-            num_block=residual_block_num,bias=is_bias
+    if res_actfn=="relu".casefold():
+        block.append(
+            ResidualBlock(
+                in_channel=in_channel,out_channel=out_channel,
+                kernel=kernel,stride=stride,padding=padding,
+                num_block=residual_block_num,bias=is_bias
+            )
         )
-    )
+    elif res_actfn=="lif".casefold():
+        block.append(
+            ResidualLIFBlock(
+                in_channel=in_channel,out_channel=out_channel,
+                kernel=kernel,stride=stride,padding=padding,
+                num_block=residual_block_num,bias=is_bias,
+                in_size=in_size, dt=lif_dt,
+                init_tau=lif_init_tau, min_tau=lif_min_tau,
+                threshold=lif_threshold, vrest=lif_vrest,
+                reset_mechanism=lif_reset_mechanism, spike_grad=surrogate.fast_sigmoid(),
+                output=False,is_train_tau=is_train_tau
+            )
+        )
 
     if is_bn:
         block.append(
@@ -416,7 +349,8 @@ class ResCSNN(SNN):
         self.is_bn = conf["is-bn"]
         self.linear_hidden = conf["linear-hidden"]
         self.dropout = conf["dropout"]
-        
+        self.res_actfn=conf["res-actfn"] if "res-actfn" in conf.keys() else "relu" #残差ブロックの活性化関数
+
         self.output_mem=conf["output-membrane"]
         self.dt = conf["dt"]
         self.init_tau = conf["init-tau"]
@@ -438,6 +372,7 @@ class ResCSNN(SNN):
         for i,hidden_c in enumerate(self.hiddens):
 
             block,block_outsize=add_residual_block(
+                res_actfn=self.res_actfn,
                 in_size=in_size, in_channel=in_c, out_channel=hidden_c,
                 kernel=3, stride=1, padding=1,  # カーネルサイズ、ストライド、パディングの設定
                 is_bias=is_bias, residual_block_num=self.residual_blocks[i],

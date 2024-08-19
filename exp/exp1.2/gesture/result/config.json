@@ -1,0 +1,6 @@
+{
+    "base-timewindow": 3000,
+    "in-size": 32,
+    "input-sequence": 300,
+    "minibatch": 16
+}

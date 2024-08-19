@@ -1,0 +1,8 @@
+{
+    "target": "/mnt/ssd1/hiranotakaya/master/dev/workspace/prj_202409_2MR/laplace-version/train/output/0815/gesture/v1.1/dynasnn-tau_middle",
+    "device": 0,
+    "delay": 500,
+    "saveto": "test/0816/dynasnn-d500",
+    "modelname": "model_epoch_200",
+    "is_video": false
+}

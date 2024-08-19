@@ -1,0 +1,11 @@
+{
+    "target": "/mnt/ssd1/hiranotakaya/master/dev/workspace/prj_202409_2MR/laplace-version/train/output/0816/gesture/v1.1/paramsnn-tau_small",
+    "device": 0,
+    "saveto": "test/0818/v1.0/paramsnn_small-ts5_10",
+    "modelname": "model_best.pth",
+    "is_video": false,
+    "timescale1": 5,
+    "timescale2": 10,
+    "testnum": 10,
+    "test_droprate": 0.2
+}

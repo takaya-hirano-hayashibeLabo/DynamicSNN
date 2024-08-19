@@ -1,0 +1,8 @@
+{
+    "target": "/mnt/ssd1/hiranotakaya/master/dev/workspace/prj_202409_2MR/laplace-version/train/output/0816/gesture/v1.0/lstm",
+    "device": 0,
+    "timescale": 3,
+    "saveto": "test/0816/v1.1/lstm-ts3",
+    "modelname": "model_final.pth",
+    "is_video": false
+}
