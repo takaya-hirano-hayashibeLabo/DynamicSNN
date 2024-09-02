@@ -17,6 +17,8 @@ import torchvision
 import tonic
 from torch.nn.utils.rnn import pad_sequence
 import matplotlib.pyplot as plt
+from math import floor
+from datetime import datetime
 
 
 from src.utils import load_yaml,print_terminal,calculate_accuracy,Pool2DTransform,save_dict2json
@@ -24,7 +26,7 @@ from src.model import DynamicCSNN,CSNN,DynamicResCSNN, ResCSNN, ResNetLSTM
 
 
 def plot_and_save_curves(result, resultpath, epoch):
-    df = pd.DataFrame(result, columns=["epoch", "train_loss_mean", "train_loss_std", "train_acc_mean", "train_acc_std", "val_loss_mean", "val_loss_std", "val_acc_mean", "val_acc_std"])
+    df = pd.DataFrame(result, columns=["epoch", "datetime","train_loss_mean", "train_loss_std", "train_acc_mean", "train_acc_std", "val_loss_mean", "val_loss_std", "val_acc_mean", "val_acc_std"])
     
     fig, axes = plt.subplots(1, 2, figsize=(12, 5))
 
@@ -86,7 +88,8 @@ def main():
     iter_max=train_conf["iter"]
     save_interval=train_conf["save_interval"]
     minibatch=train_conf["batch"]
-    sequence=train_conf["sequence"] #時系列のタイムシーケンス
+    base_timewindow=train_conf["base-timewindow"]
+    base_sequence=train_conf["base-sequence"]
     #<< configの準備 <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 
 
@@ -120,35 +123,43 @@ def main():
 
 
     #>> データの準備 >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-    time_window=train_conf["time-window"]
-    if model_conf["in-size"]==128:
-        transform=torchvision.transforms.Compose([
-            tonic.transforms.Denoise(filter_time=10000), #denoiseって結構時間かかる??
-            tonic.transforms.ToFrame(sensor_size=tonic.datasets.DVSGesture.sensor_size,time_window=time_window),
-            torch.from_numpy,
-        ])
-    else:
-        transform=torchvision.transforms.Compose([
-            tonic.transforms.Denoise(filter_time=10000),
-            tonic.transforms.Downsample(sensor_size=tonic.datasets.DVSGesture.sensor_size,target_size=(model_conf["in-size"],model_conf["in-size"])),
-            tonic.transforms.ToFrame(sensor_size=(model_conf["in-size"],model_conf["in-size"],2),time_window=time_window),
-            torch.from_numpy,
-        ])
+    train_loaders=[]
+    test_loaders=[]
+    for timescale in train_conf["timescales"]:
+        time_window=round(base_timewindow/timescale)
+        if model_conf["in-size"]==128:
+            transform=torchvision.transforms.Compose([
+                tonic.transforms.Denoise(filter_time=10000), #denoiseって結構時間かかる??
+                tonic.transforms.ToFrame(sensor_size=tonic.datasets.DVSGesture.sensor_size,time_window=time_window),
+                torch.from_numpy,
+            ])
+        else:
+            transform=torchvision.transforms.Compose([
+                tonic.transforms.Denoise(filter_time=10000),
+                tonic.transforms.Downsample(sensor_size=tonic.datasets.DVSGesture.sensor_size,target_size=(model_conf["in-size"],model_conf["in-size"])),
+                tonic.transforms.ToFrame(sensor_size=(model_conf["in-size"],model_conf["in-size"],2),time_window=time_window),
+                torch.from_numpy,
+            ])
 
 
-    trainset=tonic.datasets.DVSGesture(save_to=ROOT/"original-data",train=True,transform=transform)
-    testset=tonic.datasets.DVSGesture(save_to=ROOT/"original-data",train=False,transform=transform)
+        trainset=tonic.datasets.DVSGesture(save_to=ROOT/"original-data",train=True,transform=transform)
+        testset=tonic.datasets.DVSGesture(save_to=ROOT/"original-data",train=False,transform=transform)
 
-    cachepath=Path(__file__).parent/f"cache/{train_conf['datatype']}/window{train_conf['time-window']}"
-    trainset=tonic.DiskCachedDataset(trainset,cache_path=str(cachepath/"train"))
-    testset=tonic.DiskCachedDataset(testset,cache_path=str(cachepath/"test"))
+        cachepath=ROOT/f"cache-data/{train_conf['datatype']}/window{time_window}"
+        trainset=tonic.DiskCachedDataset(trainset,cache_path=str(cachepath/"train"))
+        testset=tonic.DiskCachedDataset(testset,cache_path=str(cachepath/"test"))
 
-    train_loader = DataLoader(trainset, batch_size=minibatch, shuffle=True,collate_fn=custom_collate_fn ,num_workers=3)
-    test_loader = DataLoader(testset,   batch_size=minibatch, shuffle=False,collate_fn=custom_collate_fn,num_workers=3)
-    print("done")
+        train_loaders.append({   
+            "timescale":timescale,
+            "loader":DataLoader(trainset, batch_size=minibatch, shuffle=True,collate_fn=custom_collate_fn ,num_workers=1)
+        })
+        test_loaders.append({
+            "timescale":timescale,
+            "loader":DataLoader(testset,   batch_size=minibatch, shuffle=False,collate_fn=custom_collate_fn,num_workers=1),
+        })
+    iter_n_train=len(train_loaders[0]["loader"]) #イテレーションの最大数
+    iter_n_test =len( test_loaders[0]["loader"])
     #<< データの準備 <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-
-
 
 
     #>> 学習ループ >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
@@ -156,49 +167,45 @@ def main():
     best_score={"mean":0.0, "std":0.0}
     for e in range(epoch):
 
+        train_iters=[{"timescale":items["timescale"], "iter":iter(items["loader"])} for items in train_loaders]
+
         model.train()
         it=0
         train_loss_list=[]
         train_acc_list=[]
-        for batch_idx, (inputs, targets) in enumerate(train_loader):
-            inputs, targets = inputs.to(device).permute((1,0,*[i+2 for i in range(inputs.ndim-2)])).to(torch.float), targets.to(device)
-            inputs[inputs>0]=1.0
+        for batch_idx in range(iter_n_train):
 
-            if sequence>0 and inputs.shape[0]>sequence: #configでシーケンスが指定された場合はその長さに切り取る
-                inputs=inputs[:sequence]
+            # print(f"iter:{batch_idx}"+"-"*50)
+            iter_loss=0
+            iter_acc=0
+            for items in train_iters:
+                ts,train_iter=items["timescale"], items["iter"]
+                inputs,targets=next(train_iter)
+                inputs, targets = inputs.to(device).permute((1,0,*[i+2 for i in range(inputs.ndim-2)])).to(torch.float), targets.to(device)
+                inputs[inputs>0]=1.0
 
-            outputs = model.forward(inputs)
-            loss:torch.Tensor = criterion(outputs, targets)
-            loss.backward()
-            optim.step()
-            optim.zero_grad()
-            train_loss_list.append(loss.item())
+                sequence=round(base_sequence*ts) #timescaleに合わせてsequenceを調整
+                if sequence>0 and inputs.shape[0]>sequence: #configでシーケンスが指定された場合はその長さに切り取る
+                    inputs=inputs[:sequence]
 
-            if "snn".casefold() in model_conf["type"]:
-                train_acc_list.append(SF.accuracy_rate(outputs,targets))
-            else:
-                train_acc_list.append(calculate_accuracy(outputs,targets))
+                # print(f"timescale:{ts}, in shape:{inputs.shape}")
+                # print(f"target exp:{targets[:10]}")
 
-            print(f"Epoch [{e+1}/{epoch}], Step [{batch_idx}/{len(train_loader)}], Loss: {loss.item():.4f}")
+                outputs = model.forward(inputs)
+                loss:torch.Tensor = criterion(outputs, targets)
+                loss.backward()
+                optim.step()
+                optim.zero_grad()
+                iter_loss+=loss.item()
 
+                if "snn".casefold() in model_conf["type"]:
+                    iter_acc+=SF.accuracy_rate(outputs,targets)
+                else:
+                    iter_acc+=calculate_accuracy(outputs,targets)
 
-
-            ##>> 入力が正しいか確認 >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-            ##>> 検証済み >>
-            # from src.utils import save_heatmap_video
-            # for i_frame in range(10):
-            #     frame_np=inputs[:,i_frame].to("cpu").detach().numpy()
-            #     frame=1.5*frame_np[:,0]+0.5*frame_np[:,1]-1
-            #     save_heatmap_video(
-            #         frame,
-            #         output_path=Path(args.target)/f"video",
-            #         file_name=f"train_input_label{targets[i_frame]}",
-            #         fps=30,scale=10
-            #     )
-            # exit(1)
-            ##<< 入力が正しいか確認 <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-
-
+            train_loss_list.append(iter_loss/len(train_iters))
+            train_acc_list.append(iter_acc/len(train_iters))
+            print(f"Epoch [{e+1}/{epoch}], Step [{batch_idx}/{iter_n_train}], Loss: {loss.item():.4f}")
             it+=1
             if iter_max>0 and it>iter_max:
                 break
@@ -208,28 +215,43 @@ def main():
 
         # Validation step
         model.eval()
+        test_iters=[{"timescale":items["timescale"], "iter":iter(items["loader"])} for items in test_loaders]
         with torch.no_grad():
             val_loss = []
             test_acc_list=[]
-            for inputs, targets in test_loader:
-                inputs, targets = inputs.to(device).permute((1,0,*[i+2 for i in range(inputs.ndim-2)])).to(torch.float), targets.to(device)
-                inputs[inputs>0]=1.0
 
-                if sequence>0 and inputs.shape[0]>sequence: #configでシーケンスが指定された場合はその長さに切り取る
-                    inputs=inputs[:sequence]
-                
-                outputs = model(inputs)
-                val_loss.append(criterion(outputs, targets).item())
-                if "snn".casefold() in model_conf["type"]:
-                    test_acc_list.append(SF.accuracy_rate(outputs,targets))
-                else:
-                    test_acc_list.append(calculate_accuracy(outputs,targets))
+            for it_test in range(iter_n_test):
+                iter_loss=0
+                iter_acc=0
+                for items in test_iters:
+                    ts,test_iter=items["timescale"],items["iter"]
+                    inputs,targets=next(test_iter)
+                    inputs, targets = inputs.to(device).permute((1,0,*[i+2 for i in range(inputs.ndim-2)])).to(torch.float), targets.to(device)
+                    inputs[inputs>0]=1.0
 
+                    sequence=round(base_sequence*ts) #timescaleに合わせてsequenceを調整
+                    if sequence>0 and inputs.shape[0]>sequence: #configでシーケンスが指定された場合はその長さに切り取る
+                        inputs=inputs[:sequence]
+                    
+                    outputs = model(inputs)
+
+                    iter_loss+=criterion(outputs, targets).item()
+                    if "snn".casefold() in model_conf["type"]:
+                        iter_acc+=SF.accuracy_rate(outputs,targets)
+                    else:
+                        iter_acc+=calculate_accuracy(outputs,targets)
+
+                val_loss.append(iter_loss/len(test_iters))
+                test_acc_list.append(iter_acc/len(test_iters))
+
+                if it_test>iter_max and iter_max>0:
+                    break
 
             acc_mean,acc_std=np.mean(test_acc_list),np.std(test_acc_list)
             if acc_mean>best_score["mean"]: #テスト最高スコアのモデルを保存
                 best_score["mean"]=acc_mean
                 best_score["std"]=acc_std
+                best_score["epoch"]=e
                 save_dict2json(best_score,resultpath/f"best-score.json")
                 torch.save(model.state_dict(),resultpath/f"model_best.pth")
 
@@ -241,6 +263,7 @@ def main():
 
         result.append([
             e,
+            datetime.now(),
             np.mean(train_loss_list), np.std(train_loss_list),
             np.mean(train_acc_list), np.std(train_acc_list),
             np.mean(val_loss),np.std(val_loss),
@@ -248,7 +271,7 @@ def main():
         ])
         result_db = pd.DataFrame(
             result, 
-            columns=["epoch", "train_loss_mean", "train_loss_std", "train_acc_mean", "train_acc_std", "val_loss_mean","val_loss_std", "val_acc_mean", "val_acc_std"]
+            columns=["epoch","datetime","train_loss_mean", "train_loss_std", "train_acc_mean", "train_acc_std", "val_loss_mean","val_loss_std", "val_acc_mean", "val_acc_std"]
         )
         result_db.to_csv(resultpath / "training_results.csv", index=False)
         # Plot and save curves

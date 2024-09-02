@@ -25,3 +25,8 @@ marker:
   middle: "x"
   large: "o"
   small: "^"
+
+hatch:
+  middle: "/"
+  large: "-"
+  small: "\\"

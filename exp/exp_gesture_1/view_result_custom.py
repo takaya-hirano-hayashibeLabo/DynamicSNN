@@ -13,6 +13,9 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from math import floor
 from matplotlib import rcParams
+import seaborn as sns
+sns.set(style="darkgrid")
+
 
 from src.utils import load_yaml,print_terminal,calculate_accuracy,save_dict2json,save_heatmap_video,load_json2dict
 
