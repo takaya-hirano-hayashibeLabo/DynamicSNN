@@ -145,7 +145,7 @@ def main():
         trainset=tonic.datasets.DVSGesture(save_to=ROOT/"original-data",train=True,transform=transform)
         testset=tonic.datasets.DVSGesture(save_to=ROOT/"original-data",train=False,transform=transform)
 
-        cachepath=ROOT/f"cache-data/{train_conf['datatype']}/window{time_window}"
+        cachepath=ROOT/f"cache-data/{train_conf['datatype']}/window{time_window}-insize{model_conf['in-size']}"
         trainset=tonic.DiskCachedDataset(trainset,cache_path=str(cachepath/"train"))
         testset=tonic.DiskCachedDataset(testset,cache_path=str(cachepath/"test"))
 

@@ -1,0 +1,35 @@
+train:
+  batch: 32
+  epoch: 400
+  iter: -1 #ここは-1にするとmaxまで. とりあえず20くらいでいい
+  lr: 0.0005
+  save_interval: 20 #epochごと
+  datatype: gesture
+  base-timewindow: 3000 #μs (=3ms =0.003s)
+  base-sequence: 300 #シーケンスは制限する
+  timescales: [0.5,1.0,2.0] #学習するタイムスケール.
+  schedule-step: -1 #-1でscheduleなし
+  schedule-rate: 0.5
+
+model:
+  type: lstm
+  cnn-type: res #resで残差ブロックCNNになる
+
+  in-size: 32
+  in-channel: 2 
+  out-size: 11
+  hiddens: [12,32] 
+  pool-type: avg
+  pool-size: [2,2]
+  residual-block: [3,3] #2にするとresidual blockあたり1+2層のCNNが積まれる
+  is-bn: false #batch normalizationするかどうか. 
+  dropout: 0.3
+  clip-norm: 1.0 #勾配クリッピングの最大勾配. 一般的に1.0が使われる
+
+
+  linear-hidden: 512
+
+  lstm-hidden-num: 2
+  lstm-hidden: 256
+
+  dt: 0.003 #s

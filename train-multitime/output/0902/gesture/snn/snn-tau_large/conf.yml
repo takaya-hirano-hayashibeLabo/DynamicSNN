@@ -1,0 +1,41 @@
+train:
+  batch: 32
+  epoch: 400
+  iter: -1 #ここは-1にするとmaxまで. とりあえず20くらいでいい
+  lr: 0.0005
+  save_interval: 20 #epochごと
+  datatype: gesture
+  base-timewindow: 3000 #μs (=3ms =0.003s)
+  base-sequence: 300 #シーケンスは制限する
+  timescales: [0.5,1.0,2.0] #学習するタイムスケール.
+  schedule-step: -1 #-1でscheduleなし
+  schedule-rate: 0.5
+
+model:
+  type: snn
+  cnn-type: res #resで残差ブロックCNNになる
+  res-actfn: relu
+
+  in-size: 32
+  in-channel: 2 
+  out-size: 11
+  hiddens: [12,32] 
+  pool-type: avg
+  pool-size: [2,2]
+  residual-block: [2,2] #2にするとresidual blockあたり1+2層のCNNが積まれる
+  is-bn: false #batch normalizationするかどうか. 
+  clip-norm: 1.0 #勾配クリッピングの最大勾配. 一般的に1.0が使われる
+
+  linear-hidden: 512
+
+  dropout: 0.3
+
+  dt: 0.003 #s
+  init-tau: 0.01 #dt/tauが1を超えないようにする.
+  min-tau: 0.003
+  train-tau: false
+  v-threshold: 0.1
+  v-rest: 0.0
+  reset-mechanism: zero
+  spike-grad: fast-sigmoid
+  output-membrane: false
