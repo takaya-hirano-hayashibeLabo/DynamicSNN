@@ -24,6 +24,7 @@ model:
   pool-size: [2,2]
   residual-block: [2,2] #2にするとresidual blockあたり1+2層のCNNが積まれる
   is-bn: false #batch normalizationするかどうか. 
+  clip-norm: 1.0 #勾配クリッピングの最大勾配. 一般的に1.0が使われる
 
   linear-hidden: 512
 

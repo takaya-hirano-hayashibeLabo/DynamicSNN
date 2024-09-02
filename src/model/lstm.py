@@ -12,6 +12,7 @@ class LSTM(nn.Module):
         self.hidden=conf["hidden"]
         self.hidden_num=conf["hidden-num"]
         self.out_size=conf["out-size"]
+        self.clip_norm=conf["clip-norm"] if "clip-norm" in conf.keys() else 1.0
 
 
         self.lstm=nn.LSTM(
@@ -41,6 +42,13 @@ class LSTM(nn.Module):
 
         return out
     
+    def clip_gradients(self):
+        """
+        Clips gradients to prevent exploding gradients.
+        
+        :param max_norm: Maximum norm of the gradients.
+        """
+        torch.nn.utils.clip_grad_norm_(self.parameters(), self.clip_norm)
 
 def get_conv_outsize(model,in_size,in_channel):
     input_tensor = torch.randn(1, in_channel, in_size, in_size)

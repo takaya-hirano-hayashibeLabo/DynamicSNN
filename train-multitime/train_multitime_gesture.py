@@ -194,6 +194,7 @@ def main():
                 outputs = model.forward(inputs)
                 loss:torch.Tensor = criterion(outputs, targets)
                 loss.backward()
+                model.clip_gradients() #勾配クリッピング
                 optim.step()
                 optim.zero_grad()
                 iter_loss+=loss.item()

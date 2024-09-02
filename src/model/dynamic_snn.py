@@ -21,6 +21,7 @@ class DynamicSNN(nn.Module):
         self.in_size=conf["in-size"]
         self.hiddens = conf["hiddens"]
         self.out_size = conf["out-size"]
+        self.clip_norm=conf["clip-norm"] if "clip-norm" in conf.keys() else 1.0
         self.dropout=conf["dropout"]
         self.output_mem=conf["output-membrane"]
 
@@ -121,6 +122,14 @@ class DynamicSNN(nn.Module):
                 taus=taus | layer.get_tau()
 
         return taus
+
+    def clip_gradients(self):
+        """
+        Clips gradients to prevent exploding gradients.
+        
+        :param max_norm: Maximum norm of the gradients.
+        """
+        torch.nn.utils.clip_grad_norm_(self.parameters(), self.clip_norm)
 
 
     def forward(self,s:torch.Tensor):

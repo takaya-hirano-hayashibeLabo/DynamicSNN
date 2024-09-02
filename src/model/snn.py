@@ -18,6 +18,7 @@ class SNN(nn.Module):
         self.in_size=conf["in-size"]
         self.hiddens = conf["hiddens"]
         self.out_size = conf["out-size"]
+        self.clip_norm=conf["clip-norm"] if "clip-norm" in conf.keys() else 1.0
         self.dropout=conf["dropout"]
         self.output_mem=conf["output-membrane"]
 
@@ -104,7 +105,13 @@ class SNN(nn.Module):
         elif not self.output_mem:
             return out_s
 
-
+    def clip_gradients(self):
+        """
+        Clips gradients to prevent exploding gradients.
+        
+        :param max_norm: Maximum norm of the gradients.
+        """
+        torch.nn.utils.clip_grad_norm_(self.parameters(), self.clip_norm)
 
 def get_conv_outsize(model,in_size,in_channel):
     input_tensor = torch.randn(1, in_channel, in_size, in_size)
