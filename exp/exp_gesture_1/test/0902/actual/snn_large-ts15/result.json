@@ -1,0 +1,7 @@
+{
+    "model": "snn",
+    "datatype": "gesture",
+    "time-scale": 15,
+    "acc_mean": 0.6634930932782495,
+    "acc_std": 0.013370283366721133
+}

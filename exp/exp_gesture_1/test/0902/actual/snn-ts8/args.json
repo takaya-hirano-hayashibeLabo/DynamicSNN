@@ -1,0 +1,10 @@
+{
+    "target": "/mnt/ssd1/hiranotakaya/master/dev/workspace/prj_202409_2MR/laplace-version/train-multitime/output/0902/gesture/snn/snn-tau_middle",
+    "device": "1",
+    "timescale": 8,
+    "saveto": "test/0902/actual/snn-ts8",
+    "modelname": "model_best.pth",
+    "is_video": false,
+    "testnum": 8,
+    "test_droprate": 0.2
+}

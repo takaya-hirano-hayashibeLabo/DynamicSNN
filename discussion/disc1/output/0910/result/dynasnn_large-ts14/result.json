@@ -1,0 +1,9 @@
+{
+    "model": "dynamic-snn",
+    "datatype": "gesture",
+    "time-scale": 14,
+    "mse_v_mean": 166602.8515625,
+    "mse_v_std": 4984.075208650632,
+    "mse_s_mean": 0.1015652809292078,
+    "mse_s_std": 0.0007928628937044784
+}

@@ -1,0 +1,10 @@
+{
+    "target": "/mnt/ssd1/hiranotakaya/master/dev/workspace/prj_202409_2MR/laplace-version/train-multitime/output/0902/gesture/snn/snn-tau_large",
+    "device": "1",
+    "timescale": 5,
+    "saveto": "test/0902/test/snn_large-ts5",
+    "modelname": "model_best.pth",
+    "is_video": false,
+    "testnum": 1,
+    "test_droprate": 0.2
+}

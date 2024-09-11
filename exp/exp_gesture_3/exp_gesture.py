@@ -133,7 +133,7 @@ def main():
 
 
     #>> データの準備 >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-    time_window=int(train_conf["time-window"]/timescale1)
+    time_window=int(train_conf["time-window"]/timescale1) if "time-window" in train_conf.keys() else int(train_conf["timewindow"]/timescale1)
     if model_conf["in-size"]==128:
         transform=torchvision.transforms.Compose([
             tonic.transforms.Denoise(filter_time=10000), #denoiseって結構時間かかる??
@@ -156,7 +156,7 @@ def main():
 
 
 
-    time_window=int(train_conf["time-window"]/timescale2)
+    time_window=int(train_conf["time-window"]/timescale2) if "time-window" in train_conf.keys() else int(train_conf["timewindow"]/timescale2)
     if model_conf["in-size"]==128:
         transform=torchvision.transforms.Compose([
             tonic.transforms.Denoise(filter_time=10000), #denoiseって結構時間かかる??

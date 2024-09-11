@@ -88,8 +88,8 @@ def main():
     iter_max=train_conf["iter"]
     save_interval=train_conf["save_interval"]
     minibatch=train_conf["batch"]
-    base_timewindow=train_conf["base-timewindow"]
-    base_sequence=train_conf["base-sequence"]
+    base_timewindow=train_conf["timewindow"]
+    base_sequence=train_conf["sequence"]
     #<< configの準備 <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 
 

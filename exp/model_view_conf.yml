@@ -1,9 +1,9 @@
-figsize: [8,8]
+figsize: [12,6]
 legend:
-  fontsize: 11
+  fontsize: 26
 plot:
-  markersize: 7
-labelsize: 14
+  markersize: 14
+labelsize: 32
 
 color-map: viridis
   

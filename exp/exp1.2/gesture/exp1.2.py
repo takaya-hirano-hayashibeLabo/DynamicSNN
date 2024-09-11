@@ -7,22 +7,18 @@ sys.path.append(str(ROOT))
 
 import os
 import torch
-import json
 import numpy as np
 from tqdm import tqdm
-from snntorch import functional as SF
 from torch.utils.data import DataLoader
 import pandas as pd
 import torchvision
 import tonic
 from torch.nn.utils.rnn import pad_sequence
 import matplotlib.pyplot as plt
-from math import floor
 from sklearn.linear_model import LinearRegression
 
 
-from src.utils import load_yaml,print_terminal,calculate_accuracy,save_dict2json,save_heatmap_video
-from src.model import DynamicCSNN,CSNN,DynamicResCSNN,ResNetLSTM,ResCSNN
+from src.utils import print_terminal,save_dict2json
 
 
 def plot_firing_rate(result_db,saveto):
@@ -85,7 +81,8 @@ def main():
 
 
     if not args.load_csv:
-        window_range=range(1,20,2)
+        window_range=[0.5,1,2]
+        # window_range=range(1,20,2)
         result=[]
         for i,timescale in enumerate(window_range):
         
@@ -153,8 +150,13 @@ def main():
     slope=model.coef_[0]
     intercept=model.intercept_
 
+    test_x=[
+        0.025047595777055797 ,0.012982142075677128 ,0.00885123570504434  ,
+        0.006723269,0.005430870949674179 ,0.00454992544837296  ,
+        0.003916250719853184 ,0.003449421,0.003068269,0.002760755
+    ]
     plt.scatter(result_db["firing-rate"].values,result_db["time-scale"].values,label="test plot")
-    plt.plot(np.exp(X),np.exp(model.predict(X)),label="regression",color="red")
+    plt.plot(np.array(test_x),np.exp(model.predict(np.log(test_x).reshape(-1,1))),label="regression",color="red")
     plt.xlabel('Firing Rate')
     plt.ylabel('Scale')
     plt.legend()

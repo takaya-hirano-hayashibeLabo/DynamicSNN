@@ -1,0 +1,9 @@
+{
+    "target": "/mnt/ssd1/hiranotakaya/master/dev/workspace/prj_202409_2MR/laplace-version/train-multitime/output/0902/gesture/paramsnn/paramsnn-tau_large",
+    "device": "4",
+    "timescale": 6,
+    "saveto": "output/0910/result/paramsnn_large-ts6",
+    "modelname": "model_best.pth",
+    "testnum": 8,
+    "droprate": 0.3
+}

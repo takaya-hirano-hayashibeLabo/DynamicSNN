@@ -1,0 +1,9 @@
+{
+    "model": "snn",
+    "datatype": "gesture",
+    "time-scale": 8,
+    "mse_v_mean": 4.466978371143341,
+    "mse_v_std": 0.06608451222880898,
+    "mse_s_mean": 0.10298316366970539,
+    "mse_s_std": 0.0006177154777193898
+}

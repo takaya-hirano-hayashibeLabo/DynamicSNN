@@ -143,19 +143,25 @@ class DynamicSNN(nn.Module):
         batch_size=s.shape[1]
         self.__init_lif()
 
-        # Preallocate output tensors for better performance
-        out_s = torch.empty(T, batch_size, self.out_size, device=s.device)
-        out_v = torch.empty(T, batch_size, self.out_size, device=s.device)
-        for t in range(T):
-            st,vt=self.model(s[t])
-            out_s[t]=st
-            out_v[t]=vt
-
-        if self.output_mem:
-            return out_s,out_v
-        
-        elif not self.output_mem:
+        if not self.output_mem:
+            out_s = torch.empty(T, batch_size, self.out_size, device=s.device)
+            for t in range(T):
+                st,_=self.model(s[t])
+                out_s[t]=st
             return out_s
+        
+        elif self.output_mem:
+            # Preallocate output tensors for better performance
+            out_s = torch.empty(T, batch_size, self.out_size, device=s.device)
+            out_i = torch.empty(T, batch_size, self.out_size, device=s.device)
+            out_v = torch.empty(T, batch_size, self.out_size, device=s.device)
+            for t in range(T):
+                st, (it,vt)=self.model(s[t])
+                out_s[t]=st
+                out_i[t]=it
+                out_v[t]=vt
+
+            return out_s,out_i,out_v
 
 
     def dynamic_forward(self,s:torch.Tensor, scale_predictor:ScalePredictor):
@@ -170,26 +176,28 @@ class DynamicSNN(nn.Module):
         T=s.shape[0]
         self.__init_lif()
 
-        out_s,out_v=[],[]
-        for t in tqdm(range(T)):
+        out_s,out_i,out_v=[],[],[]
+        for t in (range(T)):
 
             with torch.no_grad():
                 a=scale_predictor.predict_scale(s[t]) #現在のscaleを予測
                 # print(f"time step: {t}, predicted scale: {a}")
                 self.__set_dynamic_params(a)
-                st,vt=self.model(s[t])
+                st, (it,vt)=self.model(s[t])
 
             out_s.append(st)
+            out_i.append(it)
             out_v.append(vt)
 
         out_s=torch.stack(out_s,dim=0)
+        out_i=torch.stack(out_i,dim=0)
         out_v=torch.stack(out_v,dim=0)
 
         self.__reset_params()
         scale_predictor.reset_trj()
 
         if self.output_mem:
-            return out_s,out_v
+            return out_s,out_i,out_v
         
         elif not self.output_mem:
             return out_s
@@ -209,24 +217,26 @@ class DynamicSNN(nn.Module):
         T=s.shape[0]
         self.__init_lif()
 
-        out_s,out_v=[],[]
+        out_s,out_i,out_v=[],[],[]
         for t in range(T):
 
             with torch.no_grad():
                 self.__set_dynamic_params(a[t])
-                st,vt=self.model(s[t])
+                st, (it,vt)=self.model(s[t])
 
             out_s.append(st)
+            out_i.append(it)
             out_v.append(vt)
 
         out_s=torch.stack(out_s,dim=0)
+        out_i=torch.stack(out_i,dim=0)
         out_v=torch.stack(out_v,dim=0)
 
         self.__reset_params()
 
         if self.output_mem:
-            return out_s,out_v
-        
+            return out_s,out_i,out_v
+
         elif not self.output_mem:
             return out_s
 
@@ -239,7 +249,7 @@ def get_conv_outsize(model,in_size,in_channel):
 
 
 
-def add_csnn_block(
+def create_csnn_block(
         in_size,in_channel,out_channel,kernel,stride,padding,is_bias,is_bn,pool_type,pool_size,dropout,
         lif_dt,lif_init_tau,lif_min_tau,lif_threshold,lif_vrest,lif_reset_mechanism,lif_spike_grad,lif_output,
         ):
@@ -342,7 +352,7 @@ class DynamicCSNN(DynamicSNN):
         in_size=self.in_size
         for i,hidden_c in enumerate(self.hiddens):
 
-            block,block_outsize=add_csnn_block(
+            block,block_outsize=create_csnn_block(
                 in_size=in_size, in_channel=in_c, out_channel=hidden_c,
                 kernel=3, stride=1, padding=1,  # カーネルサイズ、ストライド、パディングの設定
                 is_bias=False, is_bn=self.is_bn, pool_type=self.pool_type,pool_size=self.pool_size[i],dropout=self.dropout,
@@ -379,7 +389,7 @@ class DynamicCSNN(DynamicSNN):
 
 
 
-def add_residual_block(
+def create_residual_block(
         in_size,in_channel,out_channel,kernel,stride,padding,is_bias,residual_block_num,is_bn,pool_type,pool_size,dropout,
         lif_dt,lif_init_tau,lif_min_tau,lif_threshold,lif_vrest,lif_reset_mechanism,lif_spike_grad,lif_output,
         res_actfn="relu"
@@ -465,7 +475,7 @@ def add_residual_block(
 class DynamicResCSNN(DynamicSNN):
     """
     DynamicSNNのCNNバージョン 
-    さらにCNNをResNetにすることで,深いネットワークの生成も可能にした
+    さらにCNNをResNetにすることで,深いネットワークの生成も可能
     """
 
     def __init__(self,conf:dict):
@@ -503,7 +513,7 @@ class DynamicResCSNN(DynamicSNN):
         in_size=self.in_size
         for i,hidden_c in enumerate(self.hiddens):
 
-            block,block_outsize=add_residual_block(
+            block,block_outsize=create_residual_block(
                 in_size=in_size, in_channel=in_c, out_channel=hidden_c,
                 kernel=3, stride=1, padding=1,  # カーネルサイズ、ストライド、パディングの設定
                 is_bias=is_bias, residual_block_num=self.residual_blocks[i],

@@ -71,7 +71,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--target', type=str,help="configのあるパス")
     parser.add_argument("--device",default=0,help="GPUの番号")
-    parser.add_argument("--timescale",default=1,type=int,help="何倍に時間をスケールするか. timescale=2でtime-windowが1/2になる.")
+    parser.add_argument("--timescale",default=1,type=int,help="何倍に時間をスケールするか. timescale=2でtimewindowが1/2になる.")
     parser.add_argument("--saveto",required=True,help="結果を保存するディレクトリ")
     parser.add_argument("--modelname",default="model_best.pth",help="モデルのファイル名")
     parser.add_argument("--is_video", action='store_true')
@@ -94,6 +94,7 @@ def main():
         os.makedirs(resultpath)
 
     conf=load_yaml(Path(args.target)/"conf.yml")
+    train_conf:dict
     train_conf,model_conf=conf["train"],conf["model"]
 
     # minibatch=train_conf["batch"]
@@ -133,7 +134,7 @@ def main():
 
 
     #>> データの準備 >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-    time_window=int(train_conf["time-window"]/timescale)
+    time_window=int(train_conf["timewindow"]/timescale) if "timewindow" in train_conf.keys() else int(train_conf["time-window"]/timescale)
     if model_conf["in-size"]==128:
         transform=torchvision.transforms.Compose([
             tonic.transforms.Denoise(filter_time=10000), #denoiseって結構時間かかる??

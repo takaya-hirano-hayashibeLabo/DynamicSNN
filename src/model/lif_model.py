@@ -166,6 +166,7 @@ class DynamicLIF(nn.Module):
 
         tau=self.min_tau+self.w.sigmoid() #tauが小さくなりすぎるとdt/tauが1を超えてしまう
         dv=self.dt/(tau*self.a) * ( -(self.v-self.vrest) + (self.a*self.r)*current ) #膜電位vの増分
+        # dv=self.dt/(tau*self.a) * ( -(self.v-self.vrest) + (1*self.r)*current ) #入力をa倍しない
         self.v=self.v+dv
         spike=self.__fire()
         v_tmp=self.v #リセット前の膜電位
@@ -174,7 +175,7 @@ class DynamicLIF(nn.Module):
         if not self.output:
             return spike
         else:
-            return spike, v_tmp
+            return spike, (current,v_tmp) #spikeに加えて, (シナプス電流, 膜電位)を返す
 
 
     def __fire(self):

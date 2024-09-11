@@ -36,7 +36,7 @@ class ScalePredictor():
 
         #>> scaleとfiring rateで線形回帰したときの係数とwindow >>>>>>>>
         window_size=120
-        slope,intercept=-1.0437631068421338,-0.6790105922709921
+        slope,intercept=-1.0437631068421338,-0.6790105922709921 
         #<< scaleとfiring rateで線形回帰したときの係数とwindow <<<<<<<<
         
         self.data_trj=torch.cat([self.data_trj.to(data.device),data.unsqueeze(1)],dim=1)
@@ -58,8 +58,8 @@ class ScalePredictor():
 
         #>> 線形回帰したときのパラメータ >>>>>>>>>>>>>>>>>>>>>>>>>>>>>
         window_size=100
-        slope=-1.3015304644834496
-        intercept=-4.641658840504729
+        # slope,intercept=-1.3015304644834496,-4.641658840504729  #timescaleを1~20にして近似したもの
+        slope,intercept=-1.9131595865891335,-7.088173872389619  #timescaleを0.5,1,2で近似したもの
         #<< 線形回帰したときのパラメータ <<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 
         self.data_trj=torch.cat([self.data_trj.to(data.device),data.unsqueeze(1)],dim=1)

@@ -3,6 +3,54 @@ import torch
 
 from .residual_block import ResidualBlock
 
+
+
+class CustomLSTMCell(nn.Module):
+    def __init__(self, input_size, hidden_size):
+        super(CustomLSTMCell, self).__init__()
+        self.input_size = input_size
+        self.hidden_size = hidden_size
+        self.i2h = nn.Linear(input_size, 4 * hidden_size)
+        self.h2h = nn.Linear(hidden_size, 4 * hidden_size)
+
+    def forward(self, x, hidden):
+        h, c = hidden
+        gates = self.i2h(x) + self.h2h(h)
+        i, f, o, g = gates.chunk(4, 1)
+        i = torch.sigmoid(i)
+        f = torch.sigmoid(f)
+        o = torch.sigmoid(o)
+        g = torch.tanh(g)
+        c_next = f * c + i * g
+        h_next = o * torch.tanh(c_next)
+        return h_next, c_next
+
+class CustomLSTM(nn.Module):
+    def __init__(self, input_size, hidden_size, num_layers):
+        super(CustomLSTM, self).__init__()
+        self.num_layers = num_layers
+        self.hidden_size = hidden_size
+        self.layers = nn.ModuleList([CustomLSTMCell(input_size if i == 0 else hidden_size, hidden_size) for i in range(num_layers)])
+
+    def forward(self, x, hidden=None):
+        if hidden is None:
+            h = [torch.zeros(x.size(1), self.hidden_size, device=x.device) for _ in range(self.num_layers)]
+            c = [torch.zeros(x.size(1), self.hidden_size, device=x.device) for _ in range(self.num_layers)]
+        else:
+            h, c = hidden
+
+        outputs = []
+        for t in range(x.size(0)):
+            x_t = x[t]
+            for layer in range(self.num_layers):
+                h[layer], c[layer] = self.layers[layer](x_t, (h[layer], c[layer]))
+                x_t = h[layer]
+            outputs.append(h[-1])
+
+        return torch.stack(outputs), (h, c)
+
+
+
 class LSTM(nn.Module):
 
     def __init__(self,conf):
@@ -15,12 +63,17 @@ class LSTM(nn.Module):
         self.clip_norm=conf["clip-norm"] if "clip-norm" in conf.keys() else 1.0
 
 
-        self.lstm=nn.LSTM(
+        # self.lstm=nn.LSTM(
+        #     input_size=self.in_size,
+        #     hidden_size=self.hidden,
+        #     num_layers=self.hidden_num,
+        # )
+
+        self.lstm=CustomLSTM( #pytorchのLSTMはループがC++で速すぎるため. SNNと速度比較し辛い
             input_size=self.in_size,
             hidden_size=self.hidden,
             num_layers=self.hidden_num,
         )
-
 
         #>> 出力層 >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
         modules=[]
@@ -126,7 +179,7 @@ class ResNetLSTM(nn.Module):
         self.is_bn = conf["is-bn"]
         self.linear_hidden = conf["linear-hidden"]
         self.dropout = conf["dropout"]
-
+        self.clip_norm=conf["clip-norm"] if "clip-norm" in conf.keys() else 1.0
         self.lstm_h_num=conf["lstm-hidden-num"]
         self.lstm_hidden=conf["lstm-hidden"]
 
@@ -160,7 +213,14 @@ class ResNetLSTM(nn.Module):
 
 
 
-        self.lstm=nn.LSTM(
+        # self.lstm=nn.LSTM(
+        #     input_size=self.linear_hidden,
+        #     hidden_size=self.lstm_hidden,
+        #     num_layers=self.lstm_h_num,
+        # )
+
+        #pytorchのLSTMはループがC++で速すぎるためSNNと速度比較し辛い. そこで自前で実装
+        self.lstm=CustomLSTM( 
             input_size=self.linear_hidden,
             hidden_size=self.lstm_hidden,
             num_layers=self.lstm_h_num,
@@ -190,3 +250,11 @@ class ResNetLSTM(nn.Module):
         out=self.out_layer(out[-1]) #最終stepだけ出力とする
 
         return out
+
+    def clip_gradients(self):
+        """
+        Clips gradients to prevent exploding gradients.
+        
+        :param max_norm: Maximum norm of the gradients.
+        """
+        torch.nn.utils.clip_grad_norm_(self.parameters(), self.clip_norm)

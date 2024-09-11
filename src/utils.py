@@ -229,6 +229,23 @@ class Pool2DTransform(nn.Module):
         return events  # Remove batch dimension
 
 
+def save_heatmap(frame,output_path,file_name,scale=5):
+    """
+    :param frame: [h x w]
+    """
+    import cv2
+    import os
+    import matplotlib.pyplot as plt
+
+    if not os.path.exists(output_path):
+        os.makedirs(output_path)
+
+    h,w=frame.shape
+    normalized_frame = ((frame + 1) / 2 * 255).astype(np.uint8)
+    # heatmap = cv2.applyColorMap(normalized_frame, cv2.COLORMAP_JET)
+    resized_heatmap = cv2.resize(normalized_frame, (w*scale,h*scale), interpolation=cv2.INTER_NEAREST)
+
+    plt.imsave(str(output_path / file_name), resized_heatmap,cmap="viridis")
 
 def save_heatmap_video(frames, output_path, file_name, fps=30, scale=5):
     import cv2

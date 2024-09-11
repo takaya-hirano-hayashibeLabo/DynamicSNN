@@ -1,0 +1,11 @@
+{
+    "target": "/mnt/ssd1/hiranotakaya/master/dev/workspace/prj_202409_2MR/laplace-version/train-multitime/output/0902/gesture/lstm",
+    "device": "1",
+    "saveto": "test/0902/test/lstm-ts1_1",
+    "modelname": "model_best.pth",
+    "is_video": false,
+    "timescale1": 1,
+    "timescale2": 1,
+    "testnum": 8,
+    "test_droprate": 0.2
+}

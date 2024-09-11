@@ -5,8 +5,8 @@ train:
   lr: 0.0005
   save_interval: 20 #epochごと
   datatype: gesture
-  base-timewindow: 3000 #μs (=3ms =0.003s)
-  base-sequence: 300 #シーケンスは制限する
+  timewindow: 3000 #μs (=3ms =0.003s)
+  sequence: 300 #シーケンスは制限する
   timescales: [0.5,1.0,2.0] #学習するタイムスケール.
   schedule-step: -1 #-1でscheduleなし
   schedule-rate: 0.5

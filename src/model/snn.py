@@ -100,7 +100,7 @@ class SNN(nn.Module):
         out_v=torch.stack(out_v,dim=0)
 
         if self.output_mem:
-            return out_s,out_v
+            return out_s,[],out_v
         
         elif not self.output_mem:
             return out_s
