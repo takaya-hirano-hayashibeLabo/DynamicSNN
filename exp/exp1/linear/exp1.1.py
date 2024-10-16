@@ -102,7 +102,7 @@ def main():
     # for name, param in model.named_parameters():
     #     print(f"Layer: {name} | Size: {param.size()} | Values : {param[:2]}")  # Print first 2 values for brevity    model.eval()
 
-    T=250
+    T=300
     batch=1
     insize=config["model"]["in-size"]
 
@@ -125,16 +125,20 @@ def main():
     org_s,org_i,org_v=model.forward(scaled_input)
     scaled_s,scaled_i,scaled_v=model.dynamic_forward_v1(scaled_input,a=torch.Tensor([a for _ in range(scaled_input.shape[0])]))
 
-    # plot_results2(base_input.detach(),scaled_input.detach(),base_v.detach(),scaled_v.detach(),org_v.detach(),savepath / "result.png")
+    plot_results(base_input.detach(),scaled_input.detach(),base_v.detach(),scaled_v.detach(),org_v.detach(),savepath / "result.png")
     plot_results(base_input.detach(),scaled_input.detach(),base_v.detach(),scaled_v.detach(),org_v.detach(),savepath / "result.svg")
 
     # Pad base_input and base_v with zeros to match length a*T
-    v1_resampled=F.interpolate(base_v.permute(1,2,0), size=a*T, mode='linear', align_corners=False).permute(-1,0,1)
+    v1_resampled=F.interpolate(base_v.permute(1,2,0), size=int(a*T), mode='linear', align_corners=False).permute(-1,0,1)
     padded_base_input = F.pad(base_input, (0, 0, 0, 0, 0, int(a * T) - base_input.shape[0]))
     padded_base_v = F.pad(base_v, (0, 0, 0, 0, 0, int(a * T) - base_v.shape[0]))
+    padded_base_s=F.pad(base_s,(0,0,0,0,0,int(a*T)-base_s.shape[0]))
+    padded_base_i=F.pad(base_i,(0,0,0,0,0,int(a*T)-base_i.shape[0]))
     df=pd.DataFrame({
         "time":torch.arange(0,int(a*T)).cpu().numpy(),
         "base_input":padded_base_input.detach().flatten(),
+        "base_s":padded_base_s.detach().flatten(),
+        "base_i":padded_base_i.detach().flatten(),
         "base_v":padded_base_v.detach().flatten(),
         "scaled_base_v":v1_resampled.detach().flatten(),
         "scaled_input":scaled_input.detach().flatten(),

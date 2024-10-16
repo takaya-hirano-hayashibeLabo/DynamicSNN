@@ -34,6 +34,10 @@ class DynamicSNN(nn.Module):
         if "fast".casefold() in conf["spike-grad"] and "sigmoid".casefold() in conf["spike-grad"]: 
             self.spike_grad = surrogate.fast_sigmoid()
 
+        self.reset_outv=True #最終出力層のLIFの膜電位をリセットするか否か. 生成モデルのときにFalseにする
+        if "reset-outmem" in conf.keys():
+            self.reset_outv=conf["reset-outmem"]
+
 
         modules=[]
         is_bias=False #biasはつけちゃダメ. ラプラス変換の式が成り立たなくなる.
@@ -68,7 +72,7 @@ class DynamicSNN(nn.Module):
             nn.Linear(self.hiddens[-1], self.out_size,bias=is_bias),
             DynamicLIF(
                 in_size=(self.out_size,),dt=self.dt,init_tau=self.init_tau, min_tau=self.min_tau,threshold=self.v_threshold,vrest=self.v_rest,
-                reset_mechanism=self.reset_mechanism,spike_grad=self.spike_grad,output=True
+                reset_mechanism=self.reset_mechanism,spike_grad=self.spike_grad,output=True, reset_v=self.reset_outv
             ),
         ]
         #<< 出力層 <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
@@ -136,6 +140,7 @@ class DynamicSNN(nn.Module):
         """
         :param s: スパイク列 [T x batch x ...]
         :return out_s: [T x batch x ...]
+        :return out_i: [T x batch x ...]
         :return out_v: [T x batch x ...]
         """
 
@@ -239,6 +244,116 @@ class DynamicSNN(nn.Module):
 
         elif not self.output_mem:
             return out_s
+
+
+    def dynamic_forward_v1_with_lifstate(self,s:torch.Tensor,a:torch.Tensor):
+        """
+        全LIFモデルのcurrent, volt, outspikeも取得する
+        時間スケールが既知のときのdynamic_forward
+        :param s: スパイク列 [T x batch x ...]
+        :param a: 時間スケールリスト [T] バッチ間で時間スケールは統一する
+        :return lif_states<dict>: {lay1:{current,volt,outspike},lay2...}
+        """
+        lif_states={}
+
+
+        self.model.eval() #絶対学習しない
+
+        T=s.shape[0]
+        self.__init_lif()
+
+        for t in range(T):
+
+            with torch.no_grad():
+                self.__set_dynamic_params(a[t])
+                st, (it,vt)=self.model(s[t])
+                lif_states=self._lifstate_collection(lif_states)
+
+
+        self.__reset_params()
+
+        return lif_states
+
+    
+    def _lifstate_collection(self,lif_states:dict):
+        """
+        毎時刻ごとのlifstateをスタックしていく
+        """
+
+        def _init_lifstates(layer_keys,states_keys):
+            lif_states={}
+            for key in layer_keys:
+                lif_states[key]={}
+                for state_key in states_keys:
+                    lif_states[key][state_key]=None
+            return lif_states
+        
+        def _get_lifstate():
+            """
+            その時刻の全lifレイヤのsatateを取得
+            """
+            lif_states={}
+            for idx,lay in enumerate(self.model):
+                if isinstance(lay,DynamicLIF):
+                    lay_name=lay._get_name()+f".{idx}"
+                    lif_states[lay_name]=lay.lif_state
+            return lif_states
+
+        current_lif_states=_get_lifstate()
+        state_keys=["current","volt","outspike"]
+
+        if len(lif_states)==0:
+            lif_states=_init_lifstates(current_lif_states.keys(),state_keys)
+
+        for key in current_lif_states.keys():
+            for state_key in state_keys:
+                item:torch.Tensor=current_lif_states[key][state_key]
+                if lif_states[key][state_key] is None: lif_states[key][state_key]=item.unsqueeze(0)
+                else: lif_states[key][state_key]=torch.cat([lif_states[key][state_key],item.unsqueeze(0)])
+        
+        return lif_states
+                
+
+
+
+
+    def dynamic_forward_genseq(self,s:torch.Tensor,a:float,head_idx:int):
+        """
+        時間スケールが既知のときのdynamic_forward
+        :param s: スパイク列 [T x batch x ...]
+        :param a: 時間スケールリスト
+        :return out_s: [T x batch x ...]
+        :return out_v: [T x batch x ...]
+        """
+        self.model.eval() #絶対学習しない
+
+        T=s.shape[0]
+        self.__init_lif()
+
+        out_s,out_i,out_v=[],[],[]
+        for t in range(T):
+
+            with torch.no_grad():
+                self.__set_dynamic_params(a) if t>head_idx else None
+                st, (it,vt)=self.model(s[t])
+
+            out_s.append(st)
+            out_i.append(it)
+            out_v.append(vt)
+
+        out_s=torch.stack(out_s,dim=0)
+        out_i=torch.stack(out_i,dim=0)
+        out_v=torch.stack(out_v,dim=0)
+
+        self.__reset_params()
+
+        if self.output_mem:
+            return out_s,out_i,out_v
+
+        elif not self.output_mem:
+            return out_s
+
+
 
 
 def get_conv_outsize(model,in_size,in_channel):
@@ -392,7 +507,7 @@ class DynamicCSNN(DynamicSNN):
 def create_residual_block(
         in_size,in_channel,out_channel,kernel,stride,padding,is_bias,residual_block_num,is_bn,pool_type,pool_size,dropout,
         lif_dt,lif_init_tau,lif_min_tau,lif_threshold,lif_vrest,lif_reset_mechanism,lif_spike_grad,lif_output,
-        res_actfn="relu"
+        res_actfn="relu",v_actf=None
         ):
     """
     param: in_size: 幅と高さ (正方形とする)
@@ -416,6 +531,7 @@ def create_residual_block(
     param: lif_spike_grad: LIFのスパイク勾配関数
     param: lif_output: LIFの出力を返すかどうか
     param: res_actfn: 残差ブロックの活性化関数
+    param: v_actf: 膜電位vの活性化関数
     """
     
     block=[]
@@ -438,7 +554,7 @@ def create_residual_block(
                 init_tau=lif_init_tau, min_tau=lif_min_tau,
                 threshold=lif_threshold, vrest=lif_vrest,
                 reset_mechanism=lif_reset_mechanism, spike_grad=surrogate.fast_sigmoid(),
-                output=False
+                output=False, v_actf=v_actf
             )
         )
 
@@ -462,7 +578,7 @@ def create_residual_block(
             init_tau=lif_init_tau, min_tau=lif_min_tau,
             threshold=lif_threshold, vrest=lif_vrest,
             reset_mechanism=lif_reset_mechanism, spike_grad=lif_spike_grad,
-            output=lif_output
+            output=lif_output, v_actf=v_actf
         )
     )
 
@@ -502,7 +618,7 @@ class DynamicResCSNN(DynamicSNN):
         self.reset_mechanism = conf["reset-mechanism"]
         if "fast".casefold() in conf["spike-grad"] and "sigmoid".casefold() in conf["spike-grad"]: 
             self.spike_grad = surrogate.fast_sigmoid()
-
+        self.v_actf=conf["v-actf"] if "v-actf" in conf.keys() else None
         is_bias=False #基本falseじゃないとラプラス変換の関係式が成り立たない
 
 
@@ -522,7 +638,7 @@ class DynamicResCSNN(DynamicSNN):
                 lif_threshold=self.v_threshold, lif_vrest=self.v_rest,
                 lif_reset_mechanism=self.reset_mechanism, lif_spike_grad=self.spike_grad,
                 lif_output=False,  # 出力を返さない設定
-                res_actfn=self.res_actfn
+                res_actfn=self.res_actfn, v_actf=self.v_actf
             )
             modules+=block
             in_c=hidden_c
@@ -539,7 +655,7 @@ class DynamicResCSNN(DynamicSNN):
                 nn.Linear(in_size,h,bias=is_bias),
                 DynamicLIF(
                     in_size=(h,),dt=self.dt,init_tau=self.init_tau, min_tau=self.min_tau,threshold=self.v_threshold,vrest=self.v_rest,
-                    reset_mechanism=self.reset_mechanism,spike_grad=self.spike_grad,output=False
+                    reset_mechanism=self.reset_mechanism,spike_grad=self.spike_grad,output=False, v_actf=self.v_actf
                 ),
             ]
             in_size=h
@@ -547,7 +663,7 @@ class DynamicResCSNN(DynamicSNN):
             nn.Linear(in_size,self.out_size,bias=is_bias),
             DynamicLIF(
                 in_size=(self.out_size,),dt=self.dt,init_tau=self.init_tau, min_tau=self.min_tau,threshold=self.v_threshold,vrest=self.v_rest,
-                reset_mechanism=self.reset_mechanism,spike_grad=self.spike_grad,output=True
+                reset_mechanism=self.reset_mechanism,spike_grad=self.spike_grad,output=True, v_actf=self.v_actf
             ),
         ]
         #<< 線形層 <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<

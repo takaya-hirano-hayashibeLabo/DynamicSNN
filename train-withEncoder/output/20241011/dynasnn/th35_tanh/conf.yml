@@ -1,0 +1,45 @@
+train:
+  batch: 32
+  epoch: 800
+  iter: -1 #ここは-1にするとmaxまで. とりあえず20くらいでいい
+  lr: 0.0003
+  save_interval: 80 #epochごと
+  datatype: gesture
+  timewindow: 3000 #μs (=3ms =0.003s)
+  sequence: 300 #シーケンスは制限する
+  timescales: [1.0] #dynaは1倍のみ学習
+  schedule-step: -1 #-1でscheduleなし
+  schedule-rate: 0.5
+
+model:
+  type: dynamic-snn
+  cnn-type: res #resで残差ブロックCNNになる
+  res-actfn: dyna-snn
+
+  in-size: 32
+  in-channel: 2 
+  out-size: 11
+  hiddens: [12,32] 
+  pool-type: max # IFEncは情報量がかなり落ちるのでmaxを使う
+  pool-size: [2,2]
+  residual-block: [2,2] #2にするとresidual blockあたり1+2層のCNNが積まれる
+  is-bn: false #batch normalizationするかどうか. 
+  clip-norm: 1.0 #勾配クリッピングの最大勾配. 一般的に1.0が使われる
+
+  linear-hidden: 512
+
+  dropout: 0.3
+
+  dt: 0.003 #s
+  init-tau: 0.06 #95%過去のstepを残す
+  min-tau: 0.003
+  v-threshold: 0.1
+  v-rest: 0.0
+  reset-mechanism: zero
+  spike-grad: fast-sigmoid
+  output-membrane: false
+  v-actf: tanh #膜電位vの活性化関数
+  
+encoder:
+  type: IF #Integrate-and-Fireモデル
+  threshold: 35

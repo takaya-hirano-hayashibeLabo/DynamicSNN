@@ -72,8 +72,7 @@ class ResidualLIFBlock(ResidualBlock):
 
     def __init__(
             self,in_size:tuple,in_channel,out_channel,kernel=3,stride=1,padding=1,num_block=1,bias=False,dropout=0.3,
-            dt=0.01,init_tau=0.5,min_tau=0.1,threshold=1.0,vrest=0,reset_mechanism="zero",spike_grad=surrogate.fast_sigmoid(),output=False,is_train_tau=True
-            ):
+            dt=0.01,init_tau=0.5,min_tau=0.1,threshold=1.0,vrest=0,reset_mechanism="zero",spike_grad=surrogate.fast_sigmoid(),output=False,is_train_tau=True):
         """
         出力は電流(=スパイクではない)
         """
@@ -140,7 +139,8 @@ class ResidualDynaLIFBlock(ResidualBlock):
 
     def __init__(
             self,in_size:tuple,in_channel,out_channel,kernel=3,stride=1,padding=1,num_block=1,bias=False,dropout=0.3,
-            dt=0.01,init_tau=0.5,min_tau=0.1,threshold=1.0,vrest=0,reset_mechanism="zero",spike_grad=surrogate.fast_sigmoid(),output=False
+            dt=0.01,init_tau=0.5,min_tau=0.1,threshold=1.0,vrest=0,reset_mechanism="zero",spike_grad=surrogate.fast_sigmoid(),output=False,
+            v_actf=None
             ):
         """
         出力は電流(=スパイクではない)
@@ -167,7 +167,7 @@ class ResidualDynaLIFBlock(ResidualBlock):
                     init_tau=init_tau, min_tau=min_tau,
                     threshold=threshold, vrest=vrest,
                     reset_mechanism=reset_mechanism, spike_grad=spike_grad,
-                    output=False
+                    output=False, v_actf=v_actf
                 )
             )
             

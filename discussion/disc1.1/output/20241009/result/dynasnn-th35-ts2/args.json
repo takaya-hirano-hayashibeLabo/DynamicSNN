@@ -1,0 +1,9 @@
+{
+    "target": "/mnt/ssd1/hiranotakaya/master/dev/workspace/prj_202409_2MR/laplace-version/train-withEncoder/output/20241009/dynalif/th35",
+    "device": "2",
+    "timescale": 2,
+    "saveto": "output/20241009/result/dynasnn-th35-ts2",
+    "modelname": "model_best.pth",
+    "testnum": 1,
+    "droprate": 0.3
+}

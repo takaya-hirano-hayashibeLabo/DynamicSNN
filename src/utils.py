@@ -247,7 +247,7 @@ def save_heatmap(frame,output_path,file_name,scale=5):
 
     plt.imsave(str(output_path / file_name), resized_heatmap,cmap="viridis")
 
-def save_heatmap_video(frames, output_path, file_name, fps=30, scale=5):
+def save_heatmap_video(frames, output_path, file_name, fps=30, scale=5, frame_label_view=True):
     import cv2
     import subprocess
     import os
@@ -268,7 +268,8 @@ def save_heatmap_video(frames, output_path, file_name, fps=30, scale=5):
         resized_heatmap = cv2.resize(heatmap, (new_width, new_height))
 
         # Add frame number text
-        cv2.putText(resized_heatmap, f"Frame: {i+1}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
+        if frame_label_view:
+            cv2.putText(resized_heatmap, f"Frame: {i+1}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
 
         video.write(resized_heatmap)
 

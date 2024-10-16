@@ -4,6 +4,123 @@
 """
 import torch
 
+class IFEncoder():
+    """
+    積分発火(Integrated Firing)のエンコーダ
+    イベントデータに対してこれを噛ませることで、単純なタイムスケーリングになりそうな感じがする
+    入力イベントデータは1にクリップしてないものを用いる
+    """
+    def __init__(self,threshold,device="cpu"):
+        self.threshold=threshold #発火の閾値
+        self.device=device
+        self.skip_ndim=2
+
+    def __call__(self,x:torch.Tensor):
+        """
+        イベントデータは1クリップしてないものを入力する
+        :param x: [N x T x xdim]
+        :return out_spikes: [N x T x xdim]
+        """
+        if not isinstance(x,torch.Tensor):
+            x=torch.Tensor(x).to(self.device)
+
+        N,T=x.shape[0],x.shape[1]
+        internal_state=torch.zeros(size=(N,)+self._get_xdim(x)).to(self.device)
+        out_spikes=torch.zeros_like(x).to(self.device)
+        for t in range(T):
+            internal_state+=x[:,t]
+            out_spikes[:,t]=torch.where(self._is_over_threshold(internal_state),1.0,0.0).to(self.device)
+            internal_state=self._reset_internal_state(internal_state)
+        return out_spikes
+    
+    def _get_xdim(self,x:torch.Tensor):
+        xdim_size=tuple(
+            x.shape[i+self.skip_ndim] for i in range(x.ndim-self.skip_ndim)
+        ) #2次元目以降の次元サイズ
+        return xdim_size
+            
+    def _is_over_threshold(self,internal_state):
+        return internal_state>=self.threshold
+
+    def _reset_internal_state(self,internal_state:torch.Tensor):
+        new_internal_state=internal_state.clone().detach().to(self.device)
+        new_internal_state[self._is_over_threshold(internal_state)]-=self.threshold
+        return new_internal_state
+
+
+
+
+class ThresholdEncoder():
+    """
+    閾値を超えたらスパイクを出力する
+    """
+    def __init__(self,thr_max,thr_min,resolution:int,device="cpu"):
+        """
+        :param thr_max, thr_min: 閾値の最大, 最小
+        :param resolution: 閾値の分割数
+        """
+        self.threshold=torch.linspace(thr_min,thr_max,resolution).to(device)
+        self.resolution=resolution
+        self.skip_ndim=2 #0,1次元目は飛ばす(N x Tとわかっているため)
+        self.device=device
+
+    def _is_same_ndim(self,x:torch.Tensor):
+        """
+        入力とthresholdの次元数が一致しているか
+        """
+        return x.ndim==self.threshold.ndim
+    
+    def _reshape_threshold(self,x:torch.Tensor):
+        """
+        :param x: [N x T x xdim]
+        :return: [N x T x resolution x xdim]
+        """
+        nxdim=x.ndim-self.skip_ndim #2次元目以降の次元数
+        new_thr_size=(1,1,self.resolution)+tuple(1 for _ in range(nxdim))
+        
+        self.threshold=self.threshold.view(*new_thr_size)
+
+        # xdim_size=tuple(
+        #     [x.shape[i+skip_ndim] for i in range(x.ndim-skip_ndim)]
+        # ) #2次元目以降の次元サイズ
+
+    def _get_xdim(self,x:torch.Tensor):
+        xdim_size=tuple(
+            x.shape[i+self.skip_ndim] for i in range(x.ndim-self.skip_ndim)
+        ) #2次元目以降の次元サイズ
+        return xdim_size
+    
+    def __call__(self,x:torch.Tensor):
+        """
+        :param x: [N x T x xdim]
+        :return: [N x T x resolution x xdim]
+        """
+        if not isinstance(x, torch.Tensor):
+            x=torch.Tensor(x)
+
+        N, T = x.shape[0],x.shape[1]
+
+        out_spike_shape=(N,T,self.resolution) + self._get_xdim(x)
+        out_spike=torch.zeros(out_spike_shape,device=self.device)
+
+        #>> 入力に合わせてthresholdの次元数を調整 >>
+        if not self._is_same_ndim(x): self._reshape_threshold(x)
+
+        #>> 入力をシフトして前後の値を比較 >>
+        x_prev=x[:,:-1].unsqueeze(2) #unsqueezeはthreshold次元を追加
+        x_next=x[:,1:].unsqueeze(2)
+
+        # >> 閾値をまたいだらTrueとする >>
+        spike_mask=(
+            ((x_prev<=self.threshold) & (self.threshold<x_next)) |
+            ((x_next<self.threshold) & (self.threshold<=x_prev))
+        )
+
+        out_spike[:,1:]=spike_mask.float().to(self.device)
+
+        return out_spike
+        
+
 class DiffEncoder():
     """
     時間変量に応じてスパイクが出力される
