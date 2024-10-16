@@ -23,7 +23,7 @@ class DynamicSNN(nn.Module):
         self.out_size = conf["out-size"]
         self.clip_norm=conf["clip-norm"] if "clip-norm" in conf.keys() else 1.0
         self.dropout=conf["dropout"]
-        self.output_mem=conf["output-membrane"]
+        self.output_mem=conf["output-membrane"] #forwardのreturnをspikeだけかmembraneも返すか
 
         self.dt = conf["dt"]
         self.init_tau = conf["init-tau"]
@@ -38,6 +38,8 @@ class DynamicSNN(nn.Module):
         if "reset-outmem" in conf.keys():
             self.reset_outv=conf["reset-outmem"]
 
+        self.v_actf=conf["v-actf"] if "v-actf" in conf.keys() else None #これは入力スパイク数が速度変化によって変わるときに使う
+
 
         modules=[]
         is_bias=False #biasはつけちゃダメ. ラプラス変換の式が成り立たなくなる.
@@ -46,8 +48,11 @@ class DynamicSNN(nn.Module):
         modules+=[
             nn.Linear(self.in_size, self.hiddens[0],bias=is_bias),
             DynamicLIF(
-                in_size=(self.hiddens[0],),dt=self.dt,init_tau=self.init_tau, min_tau=self.min_tau,threshold=self.v_threshold,vrest=self.v_rest,
-                reset_mechanism=self.reset_mechanism,spike_grad=self.spike_grad,output=False
+                in_size=(self.hiddens[0],),dt=self.dt,
+                init_tau=self.init_tau, min_tau=self.min_tau,
+                threshold=self.v_threshold,vrest=self.v_rest,
+                reset_mechanism=self.reset_mechanism,spike_grad=self.spike_grad,
+                output=False,v_actf=self.v_actf
             ),
             nn.Dropout(self.dropout),
         ]
@@ -59,8 +64,11 @@ class DynamicSNN(nn.Module):
             modules+=[
                 nn.Linear(prev_hidden, hidden,bias=is_bias),
                 DynamicLIF(
-                    in_size=(hidden,),dt=self.dt,init_tau=self.init_tau, min_tau=self.min_tau,threshold=self.v_threshold,vrest=self.v_rest,
-                    reset_mechanism=self.reset_mechanism,spike_grad=self.spike_grad,output=False
+                    in_size=(hidden,),dt=self.dt,
+                    init_tau=self.init_tau, min_tau=self.min_tau,
+                    threshold=self.v_threshold,vrest=self.v_rest,
+                    reset_mechanism=self.reset_mechanism,spike_grad=self.spike_grad,
+                    output=False,v_actf=self.v_actf
                 ),
                 nn.Dropout(self.dropout),
             ]
@@ -71,8 +79,11 @@ class DynamicSNN(nn.Module):
         modules+=[
             nn.Linear(self.hiddens[-1], self.out_size,bias=is_bias),
             DynamicLIF(
-                in_size=(self.out_size,),dt=self.dt,init_tau=self.init_tau, min_tau=self.min_tau,threshold=self.v_threshold,vrest=self.v_rest,
-                reset_mechanism=self.reset_mechanism,spike_grad=self.spike_grad,output=True, reset_v=self.reset_outv
+                in_size=(self.out_size,),dt=self.dt,
+                init_tau=self.init_tau, min_tau=self.min_tau,
+                threshold=self.v_threshold,vrest=self.v_rest,
+                reset_mechanism=self.reset_mechanism,spike_grad=self.spike_grad,output=True, 
+                reset_v=self.reset_outv,v_actf=self.v_actf
             ),
         ]
         #<< 出力層 <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<

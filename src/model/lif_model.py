@@ -194,12 +194,15 @@ class DynamicLIF(nn.Module):
 
         spike=self.__fire() 
 
-        v_tmp=self.v*(1.0-spike) + self.v_peak*spike #spikeがたった膜電位をピーク値にする(描画用)
+        
 
-        if self.reset_v: self.__reset_voltage(spike)
+        if self.reset_v: 
+            v_tmp=self.v*(1.0-spike) + self.v_peak*spike #spikeがたった膜電位をピーク値にする(描画用)
+            self.__reset_voltage(spike)
+        else:
+            v_tmp=self.v #リセットしないときはピーク値への書き換えもしない
         
         # self.spike_prev=spike.detach().clone() #以前のスパイクを記憶
-
         # self._set_state(current,v_tmp,spike) #状態を記憶 見たいときにオンにする
 
         if not self.output:

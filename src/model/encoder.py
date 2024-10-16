@@ -48,8 +48,6 @@ class IFEncoder():
         return new_internal_state
 
 
-
-
 class ThresholdEncoder():
     """
     閾値を超えたらスパイクを出力する

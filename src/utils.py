@@ -285,3 +285,27 @@ def save_heatmap_video(frames, output_path, file_name, fps=30, scale=5, frame_la
     subprocess.run(ffmpeg_command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     # Remove the temporary file
     os.remove(tmpout)
+
+
+def create_windows(data:torch.Tensor, window, overlap=0.5):
+    """
+    時系列データをウィンドウに分割する関数
+    :param data: 時系列データ (torch tensor) [T x m]
+    :param window: ウィンドウサイズ
+    :param overlap: オーバーラップ率
+    :return: ウィンドウに分割されたデータ (torch tensor) [N x window x m]
+    """
+    T, m = data.shape
+    step = window - int(window*overlap)
+    num_windows = int((T - overlap) // step)
+    
+    windows = []
+    for i in range(num_windows):
+        start = i * step
+        end = start + window
+        window_data=data[start:end, :]
+        if window_data.shape[0]<window: #ウィンドウサイズより小さい場合はおしまい
+            break
+        windows.append(window_data)
+    
+    return torch.stack(windows)

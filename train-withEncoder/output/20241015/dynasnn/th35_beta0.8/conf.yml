@@ -31,7 +31,7 @@ model:
   dropout: 0.3
 
   dt: 0.003 #s
-  init-tau: 0.015 #95%過去のstepを残す
+  init-tau: 0.015 #80%過去のstepを残す
   min-tau: 0.003
   v-threshold: 0.1
   v-rest: 0.0

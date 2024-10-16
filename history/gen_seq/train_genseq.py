@@ -56,7 +56,7 @@ class TimeSeriesDataset(Dataset):
 
 
 
-def create_windows(data, window, overlap=0.5):
+def create_windows(data:torch.Tensor, window, overlap=0.5):
     """
     時系列データをウィンドウに分割する関数
     :param data: 時系列データ (torch tensor) [T x m]

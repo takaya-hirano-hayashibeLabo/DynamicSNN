@@ -90,7 +90,7 @@ def main():
     threshold=np.linspace(-1,1,model_conf["in-size"])
     in_seq=test_in[:,:n_head].detach().clone() #[N x T x m]
 
-    scale=0.75
+    scale=2.0
     with torch.no_grad():
         for n in tqdm(range(n_t)):
 
@@ -98,7 +98,8 @@ def main():
             in_spikes=in_spikes.squeeze()
             in_spikes=in_spikes.permute(1,0,2) #[T x N x cm]
   
-            _,_,out_v=model.dynamic_forward_genseq(in_spikes.to(device),a=scale,head_idx=n_head) #[T x N x h]
+            _,_,out_v=model.dynamic_forward_genseq(in_spikes.to(device),a=1.0,head_idx=n_head) #dynasnnを使わない
+            # _,_,out_v=model.dynamic_forward_genseq(in_spikes.to(device),a=scale,head_idx=n_head) #[T x N x h]
             out_v=out_v.permute(1,2,0)
             out:torch.Tensor=outnet(out_v) #差分予測 [N x m x T]
 
