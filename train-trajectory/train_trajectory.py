@@ -239,7 +239,7 @@ def main():
     target_nrm_params=target_nrm_params.to_dict()
     save_dict2json(target_nrm_params,resultpath/"target_nrm_params.json")
 
-    target_datas=2*((target_datas-target_min)/(target_max-target_min))[1:].values - 1 #入力データの正規化
+    target_datas=2*((target_datas-target_min)/(target_max-target_min)).values - 1 #入力データの正規化
 
     target_datas=create_windows(
         torch.Tensor(target_datas),
