@@ -80,3 +80,15 @@ class ContinuousSNN(nn.Module):
         out:torch.Tensor=self.model(out_v) #[N x outdim x T]
 
         return out.permute(0,2,1) #[N x T x outdim]
+
+
+    def dynamic_forward_given_scale(self,inspikes:torch.Tensor,scales:torch.Tensor):
+
+        with torch.no_grad():
+            in_sp=inspikes.permute((1,0,*[i+2 for i in range(inspikes.ndim-2)])) #[T x N x xdim]
+            _,_,out_v=self.time_encoder.dynamic_forward_v1(in_sp,scales)
+
+            out_v=out_v.permute(1,2,0)
+            out:torch.Tensor=self.model(out_v)
+
+        return out.permute(0,2,1)
