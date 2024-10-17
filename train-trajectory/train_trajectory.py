@@ -199,7 +199,8 @@ def main():
     # print("Minimum differences for each column:")
     # print(min_diffs)
 
-    input_labels=["joint0","joint1","joint2","joint3","joint4","joint5"]
+    # input_labels=["joint0","joint1","joint2","joint3","joint4","joint5"]
+    input_labels=[f"endpos_{label}" for label in ["x","y"]]
     input_datas=datasets[input_labels]
     input_max=input_datas.max()
     input_max.name="max"
@@ -211,8 +212,8 @@ def main():
     save_dict2json(input_nrm_params,resultpath/"input_nrm_params.json")
 
     input_nrm_datas=2*((input_datas-input_min)/(input_max-input_min))[1:].values - 1 #入力データの正規化
-    in_noise=np.random.normal(loc=0,scale=0.01,size=input_nrm_datas.shape)
-    input_nrm_datas+=in_noise
+    # in_noise=np.random.normal(loc=0,scale=0.01,size=input_nrm_datas.shape)
+    # input_nrm_datas+=in_noise
     input_nrm_datas=create_windows(
         torch.Tensor(input_nrm_datas),
         window=base_sequence,
