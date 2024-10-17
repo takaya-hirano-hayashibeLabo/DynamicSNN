@@ -223,24 +223,27 @@ def main():
     for column in target_datas.columns:
         plot_frequency_and_power_spectrum(target_datas[column].diff().iloc[1:].dropna().values, column, resultpath)
 
-    target_diff_datas=target_datas.diff().iloc[1:] #最初の行はNaNになるので除外
-    target_diff_max=target_diff_datas.max()
-    target_diff_max.name="max"
-    target_diff_min=target_diff_datas.min()
-    target_diff_min.name="min"
-    target_diff_nrm_params=pd.concat([target_diff_max,target_diff_min],axis=1)
-    target_diff_nrm_params.index=["target_x","target_y"]
-    target_diff_nrm_params=target_diff_nrm_params.to_dict()
-    save_dict2json(target_diff_nrm_params,resultpath/"target_diff_nrm_params.json")
+    if conf["output-model"]["out-type"].casefold()=="velocity":
+        target_datas=target_datas.diff().iloc[1:] #最初の行はNaNになるので除外
+    elif conf["output-model"]["out-type"].casefold()=="position":
+        target_datas=target_datas.iloc[1:]
+    target_max=target_datas.max()
+    target_max.name="max"
+    target_min=target_datas.min()
+    target_min.name="min"
+    target_nrm_params=pd.concat([target_max,target_min],axis=1)
+    target_nrm_params.index=["target_x","target_y"]
+    target_nrm_params=target_nrm_params.to_dict()
+    save_dict2json(target_nrm_params,resultpath/"target_nrm_params.json")
 
-    target_diff_datas=2*((target_diff_datas-target_diff_min)/(target_diff_max-target_diff_min))[1:].values - 1 #入力データの正規化
+    target_datas=2*((target_datas-target_min)/(target_max-target_min))[1:].values - 1 #入力データの正規化
 
-    target_diff_datas=create_windows(
-        torch.Tensor(target_diff_datas),
+    target_datas=create_windows(
+        torch.Tensor(target_datas),
         window=base_sequence,
         overlap=0.95
     )
-    print("input nrm shape:",input_nrm_datas.shape,"target diff shape:",target_diff_datas.shape, "[N x T x m]")
+    print("input nrm shape:",input_nrm_datas.shape,"target diff shape:",target_datas.shape, "[N x T x m]")
 
     data_indices=np.arange(input_nrm_datas.shape[0])
     np.random.shuffle(data_indices)
@@ -249,9 +252,9 @@ def main():
     test_indices=torch.tensor(data_indices[split_index:])
 
     train_inputs=input_nrm_datas[train_indices]
-    train_targets=target_diff_datas[train_indices]
+    train_targets=target_datas[train_indices]
     test_inputs=input_nrm_datas[test_indices]
-    test_targets=target_diff_datas[test_indices]
+    test_targets=target_datas[test_indices]
 
     print("train inputs shape:",train_inputs.shape,"train targets shape:",train_targets.shape)
     print("test inputs shape:",test_inputs.shape,"test targets shape:",test_targets.shape)
