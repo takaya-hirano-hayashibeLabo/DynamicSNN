@@ -207,7 +207,8 @@ def main():
     input_min.name="min"
     input_nrm_params=pd.concat([input_max,input_min],axis=1)
     input_nrm_params.index = input_labels
-    input_nrm_params.to_csv(resultpath/"input_nrm_params.csv", index=True)  # Ensure index is saved
+    input_nrm_params=input_nrm_params.to_dict()
+    save_dict2json(input_nrm_params,resultpath/"input_nrm_params.json")
 
     input_nrm_datas=2*((input_datas-input_min)/(input_max-input_min))[1:].values - 1 #入力データの正規化
     input_nrm_datas=create_windows(
@@ -229,7 +230,8 @@ def main():
     target_diff_min.name="min"
     target_diff_nrm_params=pd.concat([target_diff_max,target_diff_min],axis=1)
     target_diff_nrm_params.index=["target_x","target_y"]
-    target_diff_nrm_params.to_csv(resultpath/"target_diff_nrm_params.csv",index=True)
+    target_diff_nrm_params=target_diff_nrm_params.to_dict()
+    save_dict2json(target_diff_nrm_params,resultpath/"target_diff_nrm_params.json")
 
     target_diff_datas=2*((target_diff_datas-target_diff_min)/(target_diff_max-target_diff_min))[1:].values - 1 #入力データの正規化
 
@@ -264,7 +266,7 @@ def main():
 
     #>> 学習ループ >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
     result=[]
-    best_score={"mean":0.0, "std":0.0}
+    best_score={"mean":1e10, "std":0.0}
     for e in range(epoch):
         model.train()
         train_loss_list=[]
@@ -287,6 +289,9 @@ def main():
         # Validation step
         model.eval()
         test_loss_list=[]
+        trajectory_img_path=resultpath/f"trajectory_imgs/epoch{e+1}"
+        if not os.path.exists(trajectory_img_path):
+            os.makedirs(trajectory_img_path)
         with torch.no_grad():
             for batch_idx, (inputs, targets) in enumerate(test_loader):
                 inputs, targets = inputs.to(device), targets.to(device)
@@ -296,9 +301,9 @@ def main():
                 loss = criterion(outputs, targets)
                 test_loss_list.append(loss.item())
 
-            # Plot the trajectory for the n-th sample in the batch
+                # Plot the trajectory for the n-th sample in the batch
                 n = 0  # Change this to the desired sample index
-                plot_trajectory(outputs, targets, batch_idx, n, resultpath)
+                plot_trajectory(outputs, targets, batch_idx, n, trajectory_img_path)
 
         test_loss_mean=np.mean(test_loss_list)
         test_loss_std=np.std(test_loss_list)
