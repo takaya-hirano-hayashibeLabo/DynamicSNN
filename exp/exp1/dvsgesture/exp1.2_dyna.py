@@ -115,7 +115,7 @@ def main():
     parser.add_argument("--target",default="dyna-snn")
     args=parser.parse_args()
 
-    relativepath="20241011.dyna-snn/"
+    relativepath="20241017.dyna-snn/"
     resdir=Path(__file__).parent/f"{relativepath}"
     resdir.mkdir(exist_ok=True)
 

@@ -115,7 +115,7 @@ class DynamicLIF(nn.Module):
         :paarm reset_mechanism: 発火後の膜電位のリセット方法の指定
         :param spike_grad: 発火勾配の近似関数
         :param reset_v: 膜電位vをリセットするか (最終層のvを使うときだけFalseにしても良い)
-        :param v_actf<str>: {"relu", "tanh"} 膜電位vの活性化関数 (いい感じに内部状態を調整するために使ってる)
+        :param v_actf<str>: {None, "relu", "tanh"} 膜電位vの活性化関数 (いい感じに内部状態を調整するために使ってる)
         """
         super(DynamicLIF, self).__init__()
 
