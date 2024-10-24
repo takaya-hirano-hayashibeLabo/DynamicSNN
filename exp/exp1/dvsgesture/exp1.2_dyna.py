@@ -115,7 +115,7 @@ def main():
     parser.add_argument("--target",default="dyna-snn")
     args=parser.parse_args()
 
-    relativepath="20241017.dyna-snn/"
+    relativepath="20241024.dynasnn/"
     resdir=Path(__file__).parent/f"{relativepath}"
     resdir.mkdir(exist_ok=True)
 
@@ -136,11 +136,11 @@ def main():
     #     print(f"Layer: {name} | Size: {param.size()} | Values : {param[:2]}")  # Print first 2 values for brevity    model.eval()
 
     a=15
-    thr=35
+    thr=5
     if_encoder=IFEncoder(threshold=thr)
 
     datapath=ROOT/"original-data"
-    time_window=3000
+    time_window=30000
     insize=config["model"]["in-size"]
     batch_size=5
     time_sequence=300
@@ -171,7 +171,7 @@ def main():
         base_in.to(device).to(torch.float),
         a=torch.Tensor([1 for _ in range(base_in.shape[0])])
         )
-    plot_lif_states(lif_states,resdir/f"lifstates_thr{thr}_a{a}/base")
+    plot_lif_states(lif_states,resdir/f"lifstates_window{time_window}_thr{thr}_a{a}/base")
 
 
     scale_type=args.scale_type
@@ -203,7 +203,7 @@ def main():
             scaled_in.to(device).to(torch.float),
             a=torch.Tensor([alpha*a for _ in range(scaled_in.shape[0])])
             )
-        plot_lif_states(lif_states,resdir/f"lifstates_thr{thr}_a{a}/real")
+        plot_lif_states(lif_states,resdir/f"lifstates_window{time_window}_thr{thr}_a{a}/real")
 
 
 
@@ -222,7 +222,7 @@ def main():
             scaled_in.to(device).to(torch.float),
             a=torch.Tensor([alpha*a for _ in range(scaled_in.shape[0])])
             )
-        plot_lif_states(lif_states,resdir/f"lifstates_thr{thr}_a{a}/ideal")
+        plot_lif_states(lif_states,resdir/f"lifstates_window{time_window}_thr{thr}_a{a}/ideal")
 
 
 if __name__=="__main__":

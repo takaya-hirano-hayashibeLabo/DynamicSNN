@@ -1,0 +1,9 @@
+trajectory:
+  type: ellipse #elipse trajectry
+  origin: [0.5, 0]
+  semi_axes: [0.3, 0.2]
+  angle: 1.5708  # np.pi/2.0
+  num_loops: 50
+  loop_duration: 5
+  delta_time: 0.07
+  noise_std: -1

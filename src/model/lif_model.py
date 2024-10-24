@@ -203,7 +203,7 @@ class DynamicLIF(nn.Module):
             v_tmp=self.v #リセットしないときはピーク値への書き換えもしない
         
         # self.spike_prev=spike.detach().clone() #以前のスパイクを記憶
-        # self._set_state(current,v_tmp,spike) #状態を記憶 見たいときにオンにする
+        self._set_state(current,v_tmp,spike) #状態を記憶 見たいときにオンにする
 
         if not self.output:
             return spike

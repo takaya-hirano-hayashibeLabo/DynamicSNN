@@ -199,8 +199,8 @@ def main():
     # print("Minimum differences for each column:")
     # print(min_diffs)
 
-    # input_labels=["joint0","joint1","joint2","joint3","joint4","joint5"]
-    input_labels=[f"endpos_{label}" for label in ["x","y"]]
+    input_labels=["joint0","joint1","joint2","joint3","joint4","joint5"]
+    # input_labels=[f"endpos_{label}" for label in ["x","y"]]
     input_datas=datasets[input_labels]
     input_max=input_datas.max()
     input_max.name="max"
