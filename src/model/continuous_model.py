@@ -32,6 +32,14 @@ class ContinuousSNN(nn.Module):
         self.hiddens=conf["hiddens"]
         self.dropout=conf["dropout"]
         self.clip_norm=conf["clip-norm"]
+        if not "out-actf" in conf:
+            self.out_actf=nn.Identity()
+        elif conf["out-actf"]=="identity":
+            self.out_actf=nn.Identity()
+        elif conf["out-actf"]=="tanh":
+            self.out_actf=nn.Tanh()
+        else:
+            raise ValueError(f"Invalid out-actf: {conf['out-actf']}")
 
 
         modules=[]
@@ -52,7 +60,7 @@ class ContinuousSNN(nn.Module):
 
         modules+=[
             nn.Conv1d(in_channels=self.hiddens[-1],out_channels=self.out_size,kernel_size=1),
-            nn.Tanh() #出力は-1~1
+            self.out_actf
         ]
 
         self.model=nn.Sequential(*modules)
