@@ -244,8 +244,8 @@ def main():
         window=base_sequence,
         overlap=0.95
     )
-    
-    input_nrm_noised=input_nrm_datas+0.05*torch.randn_like(input_nrm_datas) #ノイズを加えたversion
+
+    input_nrm_noised=input_nrm_datas+0.1*torch.randn_like(input_nrm_datas) #ノイズを加えたversion
     input_nrm_datas=torch.cat([input_nrm_datas,input_nrm_noised],dim=0)
     target_datas=torch.cat([target_datas,target_datas],dim=0)
 
