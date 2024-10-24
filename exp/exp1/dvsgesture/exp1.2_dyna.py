@@ -43,9 +43,9 @@ def custom_collate_fn(batch):
 import matplotlib.pyplot as plt
 
 
-def plot_lif_states(lif_states, savepath:Path,batch_index=0, filename_prefix="lif_state"):
+def plot_lif_states(lif_states, savepath:Path, batch_index=0, filename_prefix="lif_state"):
     """
-    Plots the time series graphs for current, volt, and outspike for each layer in lif_states
+    Plots the time series graphs for current, volt, and outspike for the last layer in lif_states
     for a specified batch element.
 
     :param lif_states: Dictionary containing the states for each layer.
@@ -55,47 +55,50 @@ def plot_lif_states(lif_states, savepath:Path,batch_index=0, filename_prefix="li
     if not os.path.exists(savepath):
         os.makedirs(savepath)
 
-    for layer_name, states in lif_states.items():
-        outspike = states['outspike'].flatten(start_dim=2).cpu().numpy()
-        current = states['current'].flatten(start_dim=2).cpu().numpy()
-        volt = states['volt'].flatten(start_dim=2).cpu().numpy()
+    # Get the last item in the lif_states dictionary
+    last_layer_name, last_states = list(lif_states.items())[-1]
+    
+    outspike = last_states['outspike'].flatten(start_dim=2).cpu().numpy()
+    current = last_states['current'].flatten(start_dim=2).cpu().numpy()
+    volt = last_states['volt'].flatten(start_dim=2).cpu().numpy()
 
-        timesteps, _, dim = current.shape
+    timesteps, _, dim = current.shape
 
-        plt.figure(figsize=(15, 15))
+    plt.figure(figsize=(15, 15))
 
-        for element in range(dim):
-            # Plot current
-            plt.subplot(3, 1, 1)
-            plt.plot(range(timesteps), current[:, batch_index, element], label=f'Current Element {element}')
-            plt.title(f'{layer_name} - Current Element {element} (Batch {batch_index})')
-            plt.xlabel('Time Step')
-            plt.ylabel('Current')
-            plt.grid(True)
-            plt.legend()
+    for element in range(dim):
+        # Plot current
+        plt.subplot(3, 1, 1)
+        plt.plot(range(timesteps), current[:, batch_index, element], label=f'Current Element {element}')
+        plt.title(f'{last_layer_name} - Current Element {element} (Batch {batch_index})')
+        plt.xlabel('Time Step')
+        plt.ylabel('Current')
+        plt.grid(True)
+        plt.legend()
 
-            # Plot volt
-            plt.subplot(3,1,2)
-            plt.plot(range(timesteps), volt[:, batch_index, element], label=f'Voltage Element {element}')
-            plt.title(f'{layer_name} - Voltage Element {element} (Batch {batch_index})')
-            plt.xlabel('Time Step')
-            plt.ylabel('Voltage')
-            plt.grid(True)
-            plt.legend()
+        # Plot volt
+        plt.subplot(3, 1, 2)
+        plt.plot(range(timesteps), volt[:, batch_index, element], label=f'Voltage Element {element}')
+        plt.title(f'{last_layer_name} - Voltage Element {element} (Batch {batch_index})')
+        plt.xlabel('Time Step')
+        plt.ylabel('Voltage')
+        plt.grid(True)
+        plt.legend()
 
-            # Plot outspike
-            plt.subplot(3,1,3)
-            plt.scatter(range(timesteps), outspike[:, batch_index, element]*(element+1), label=f'Outspike Element {element}')
-            plt.title(f'{layer_name} - Outspike Element {element} (Batch {batch_index})')
-            plt.xlabel('Time Step')
-            plt.ylabel('Outspike')
-            plt.ylim([0.5,dim+0.5])
-            plt.grid(True)
-            plt.legend()
+        # Plot outspike
+        plt.subplot(3, 1, 3)
+        plt.scatter(range(timesteps), outspike[:, batch_index, element] * (element + 1), label=f'Outspike Element {element}')
+        plt.title(f'{last_layer_name} - Outspike Element {element} (Batch {batch_index})')
+        plt.xlabel('Time Step')
+        plt.ylabel('Outspike')
+        plt.ylim([0.5, dim + 0.5])
+        plt.grid(True)
+        plt.legend()
 
-        plt.tight_layout()
-        plt.savefig(savepath / f"{filename_prefix}_{layer_name}_batch{batch_index}.png")
-        plt.close()
+    plt.tight_layout()
+    plt.savefig(savepath / f"{filename_prefix}_{last_layer_name}_batch{batch_index}.png")
+    plt.close()
+
 
 def plot_histogram(data, title, filename):
     plt.figure()
@@ -133,14 +136,13 @@ def main():
 
     # Debugging parameters of each layer
     # for name, param in model.named_parameters():
-    #     print(f"Layer: {name} | Size: {param.size()} | Values : {param[:2]}")  # Print first 2 values for brevity    model.eval()
-
-    a=15
-    thr=5
+    #     print(f"Layer: {name} | Size: {param.size()} | Values : {param[:2]}")  # Print first 2 values for brevity    model.eval(
+    a=5
+    thr=10
     if_encoder=IFEncoder(threshold=thr)
 
     datapath=ROOT/"original-data"
-    time_window=30000
+    time_window=3000
     insize=config["model"]["in-size"]
     batch_size=5
     time_sequence=300
@@ -165,13 +167,14 @@ def main():
     base_in=torch.Tensor(base_in).permute(1,0,2,3,4)
     with torch.no_grad():
         base_s,_,base_v=model.forward(base_in.to(device).to(torch.float))
-    print(f"input shape: {base_in.shape}, out spike shape: {base_s.shape}")
+    # print(f"input shape: {base_in.shape}, out spike shape: {base_s.shape}")
+    print(f"base_in spike counts: {base_in.sum()}")
 
     lif_states=model.dynamic_forward_v1_with_lifstate(
         base_in.to(device).to(torch.float),
         a=torch.Tensor([1 for _ in range(base_in.shape[0])])
         )
-    plot_lif_states(lif_states,resdir/f"lifstates_window{time_window}_thr{thr}_a{a}/base")
+    plot_lif_states(lif_states,resdir/f"lifstates_insize{insize}_window{time_window}_thr{thr}_a{a}/base")
 
 
     scale_type=args.scale_type
@@ -197,13 +200,14 @@ def main():
     # scaled_in[scaled_in>0]=1.0 #スパイククリップ
     scaled_in=if_encoder(scaled_in)
     scaled_in=torch.Tensor(scaled_in).permute(1,0,2,3,4)
+    print(f"scaled_in spike counts: {scaled_in.sum()}")
 
     with torch.no_grad():
         lif_states=model.dynamic_forward_v1_with_lifstate(
             scaled_in.to(device).to(torch.float),
             a=torch.Tensor([alpha*a for _ in range(scaled_in.shape[0])])
             )
-        plot_lif_states(lif_states,resdir/f"lifstates_window{time_window}_thr{thr}_a{a}/real")
+        plot_lif_states(lif_states,resdir/f"lifstates_insize{insize}_window{time_window}_thr{thr}_a{a}/real")
 
 
 
@@ -222,7 +226,7 @@ def main():
             scaled_in.to(device).to(torch.float),
             a=torch.Tensor([alpha*a for _ in range(scaled_in.shape[0])])
             )
-        plot_lif_states(lif_states,resdir/f"lifstates_window{time_window}_thr{thr}_a{a}/ideal")
+        plot_lif_states(lif_states,resdir/f"lifstates_insize{insize}_window{time_window}_thr{thr}_a{a}/ideal")
 
 
 if __name__=="__main__":
