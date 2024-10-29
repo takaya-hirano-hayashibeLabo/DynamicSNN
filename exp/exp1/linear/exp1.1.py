@@ -89,7 +89,7 @@ def main():
     parser.add_argument("--trial",type=int,default=0)
     args=parser.parse_args()
 
-    savepath=Path(__file__).parent / f"result/trial_{args.trial}"
+    savepath=Path(__file__).parent / f"20241029_result/trial_{args.trial}"
     savepath.mkdir(parents=True,exist_ok=True)
 
     with open(Path(__file__).parent/"conf.yml", 'r') as file:
@@ -108,7 +108,7 @@ def main():
 
     p=0.1
     base_input=torch.where(
-        torch.randn(size=(T,batch,insize))<p,1.0,0.0
+        torch.rand(size=(T,batch,insize))<p,1.0,0.0
     )
     # print(base_input)
     base_s,base_i,base_v=model(base_input)

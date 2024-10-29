@@ -254,7 +254,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--target', type=str,help="configのあるパス")
     parser.add_argument("--device",default=0,help="GPUの番号")
-    parser.add_argument("--timescale",default=1,type=int,help="何倍に時間をスケールするか. timescale=2でtimewindowが1/2になる.")
+    parser.add_argument("--timescale",default=1,type=float,help="何倍に時間をスケールするか. timescale=2でtimewindowが1/2になる.")
     parser.add_argument("--saveto",required=True,help="結果を保存するディレクトリ")
     parser.add_argument("--modelname",default="model_best.pth",help="モデルのファイル名")
     parser.add_argument("--testnum",type=int,default=5,help="stdを求めるために何回testするか")
@@ -475,6 +475,9 @@ def main():
                 out_s, out_i, out_v = model.dynamic_forward_v1(
                     s=inputs,a=timescale*torch.ones(inputs.shape[0])
                 )
+                # out_s, out_i, out_v = model.dynamic_forward_v1(
+                #     s=inputs,a=torch.ones(inputs.shape[0])
+                # )
 
             out_s_scaled.append(out_s.permute(1,0,-1)) # [N x T x xdim]
             out_v_scaled.append(out_v.permute(1,0,-1)) # [N x T x xdim]
@@ -517,8 +520,9 @@ def main():
     print(f"mse_s_mean: {mse_s_mean}, mse_s_std: {mse_s_std}")
 
 
-    plot_batch_element(out_v_ideal,out_v_scaled,0,Path(args.saveto)/"v_0.png",window_size=10*timescale)
-    plot_base_sclaed_volt(out_v_base,out_v_scaled,0,Path(args.saveto)/"v_base_scaled.png",window_size=10*timescale)
+    mean_avg_base_window=1
+    plot_batch_element(out_v_ideal,out_v_scaled,0,Path(args.saveto)/"v_0.png",window_size=ceil(mean_avg_base_window*timescale))
+    plot_base_sclaed_volt(out_v_base,out_v_scaled,0,Path(args.saveto)/"v_base_scaled.png",window_size=ceil(mean_avg_base_window*timescale))
     plot_spike_element(out_s_ideal,out_s_scaled,0,Path(args.saveto)/"s_0.png")
     plot_firingrate_element(out_s_base,out_s_scaled,0,50,Path(args.saveto)/"fr_0.png")
     plot_firingrate_element(out_s_base,out_s_scaled,0,50,Path(args.saveto)/"fr_0.svg")
