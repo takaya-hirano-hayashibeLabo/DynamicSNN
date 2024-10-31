@@ -281,7 +281,7 @@ def main():
     encoder_conf=conf["encoder"] if "encoder" in conf.keys() else None
 
     # minibatch=train_conf["batch"]
-    minibatch=8
+    minibatch=32
     sequence=train_conf["sequence"] #時系列のタイムシーケンス
     loop_max=ceil(args.testsize/minibatch) if args.testsize>0 else 1e10
     #<< configの準備 <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
@@ -319,7 +319,9 @@ def main():
     #>> encoderの準備 >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
     if not encoder_conf is None:
         if encoder_conf["type"].casefold()=="if":
-            encoder=IFEncoder(encoder_conf["threshold"],device=device)
+            # encoder=IFEncoder(encoder_conf["threshold"],device=device)
+            encoder=IFEncoder(35,device=device)
+            print(f"encoder: {encoder}, threshold: {encoder_conf['threshold']}")
         else:
             raise ValueError(f"encoder type {encoder_conf['type']} is not supportated...")
     #<< encoderの準備 <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
@@ -353,6 +355,7 @@ def main():
     #>> 基準データを通す >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
     out_s_base=[] # [testnum x N x T x xdim]
     out_v_base=[] # [testnum x N x T x xdim]
+    base_inputs=[]
     with torch.no_grad():
         print_terminal(f"Forwarding base scale input"+"-"*500)
         loop_count=0
@@ -381,6 +384,15 @@ def main():
                 # )
             out_s_base.append(out_s.permute(1,0,-1)) # [N x T x xdim]
             out_v_base.append(out_v.permute(1,0,-1)) # [N x T x xdim]
+
+            print("---")
+            predcit_label=torch.argmax(torch.mean(out_s,dim=0),dim=1).flatten().cpu().numpy()
+            print(f"predict label: {predcit_label}")
+            print(f"true label: {targets.flatten().cpu().numpy()}")
+            print(f"acc: {np.mean(predcit_label==targets.flatten().cpu().numpy())}")
+
+            base_inputs=inputs
+            # print(f"base_inputs: {base_inputs.shape}")
 
             loop_count+=1
             if loop_max<=loop_count:
@@ -441,7 +453,7 @@ def main():
         ])
 
 
-    cache_path=str(f"/mnt/ssd1/hiranotakaya/master/dev/workspace/prj_202409_2MR/laplace-version/exp/exp_gesture_1/test-cache/gesture-window{time_window}")
+    cache_path=str(f"/mnt/ssd1/hiranotakaya/master/dev/workspace/prj_202409_2MR/laplace-version/exp/exp_gesture_1/test-cache/gesture-window{time_window}/test")
     testset=tonic.datasets.DVSGesture(save_to=ROOT/"original-data",train=False,transform=transform)
     testset=tonic.DiskCachedDataset(testset,cache_path=cache_path)
     test_loader = DataLoader(testset,   batch_size=minibatch, shuffle=False,collate_fn=custom_collate_fn,num_workers=3,drop_last=True)
@@ -451,6 +463,7 @@ def main():
     #>> scalingしたデータを通す >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
     out_s_scaled=[] # [testnum x N x T x xdim]
     out_v_scaled=[] # [testnum x N x T x xdim]
+    acc_list=[]
     with torch.no_grad():
         print_terminal(f"Forwarding x{timescale} scale input"+"-"*500)
         loop_count=0
@@ -478,6 +491,13 @@ def main():
                 # out_s, out_i, out_v = model.dynamic_forward_v1(
                 #     s=inputs,a=torch.ones(inputs.shape[0])
                 # )
+
+            print("---")
+            predcit_label=torch.argmax(torch.mean(out_s,dim=0),dim=1).flatten().cpu().numpy()
+            print(f"predict label: {predcit_label}")
+            print(f"true label: {targets.flatten().cpu().numpy()}")
+            print(f"acc: {np.mean(predcit_label==targets.flatten().cpu().numpy())}")
+            acc_list.append(np.mean(predcit_label==targets.flatten().cpu().numpy()))
 
             out_s_scaled.append(out_s.permute(1,0,-1)) # [N x T x xdim]
             out_v_scaled.append(out_v.permute(1,0,-1)) # [N x T x xdim]
@@ -523,6 +543,12 @@ def main():
     mean_avg_base_window=1
     plot_batch_element(out_v_ideal,out_v_scaled,0,Path(args.saveto)/"v_0.png",window_size=ceil(mean_avg_base_window*timescale))
     plot_base_sclaed_volt(out_v_base,out_v_scaled,0,Path(args.saveto)/"v_base_scaled.png",window_size=ceil(mean_avg_base_window*timescale))
+    plot_spike_element(
+        base_inputs.permute(1,0,2),
+        inputs.permute(1,0,2),
+        n=0,
+        saveto=Path(args.saveto)/"in_spike.png"
+    )
     plot_spike_element(out_s_ideal,out_s_scaled,0,Path(args.saveto)/"s_0.png")
     plot_firingrate_element(out_s_base,out_s_scaled,0,50,Path(args.saveto)/"fr_0.png")
     plot_firingrate_element(out_s_base,out_s_scaled,0,50,Path(args.saveto)/"fr_0.svg")
@@ -538,11 +564,13 @@ def main():
         "mse_v_std":mse_v_std,
         "mse_s_mean":mse_s_mean,
         "mse_s_std":mse_s_std,
+        "acc_mean":np.mean(acc_list),
+        "acc_std":np.std(acc_list),
     }
     save_dict2json(
         result,saveto=Path(args.saveto)/"result.json"
     )
-
+    print(f"acc_mean: {result['acc_mean']:.4f}, acc_std: {result['acc_std']:.4f}")
 
 if __name__=="__main__":
     main()

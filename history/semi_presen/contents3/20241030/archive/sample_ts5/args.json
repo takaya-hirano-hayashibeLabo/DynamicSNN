@@ -1,0 +1,10 @@
+{
+    "target": "/mnt/ssd1/hiranotakaya/master/dev/workspace/prj_202409_2MR/laplace-version/train-withEncoder/output/20241029/th5_beta0.5",
+    "device": "4",
+    "timescale": 5,
+    "saveto": "20241030/sample",
+    "modelname": "model_best.pth",
+    "is_video": false,
+    "testnum": 1,
+    "test_droprate": 0.2
+}

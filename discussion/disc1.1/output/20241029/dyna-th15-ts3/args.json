@@ -1,0 +1,10 @@
+{
+    "target": "/mnt/ssd1/hiranotakaya/master/dev/workspace/prj_202409_2MR/laplace-version/train-withEncoder/output/20241024/th15",
+    "device": "1",
+    "timescale": 1,
+    "saveto": "20241029/dyna-th15-ts3",
+    "modelname": "model_best.pth",
+    "testnum": 1,
+    "droprate": 0.3,
+    "testsize": 5
+}

@@ -308,6 +308,13 @@ class DynamicSNN(nn.Module):
                 if isinstance(lay,DynamicLIF):
                     lay_name=lay._get_name()+f".{idx}"
                     lif_states[lay_name]=lay.lif_state
+                    # print(f"lay: {lay_name}, scale: {lay.a}")
+                elif isinstance(lay,ResidualDynaLIFBlock):
+                    for res_idx,res_lay in enumerate(lay.model):
+                        if isinstance(res_lay,DynamicLIF):
+                            res_lay_name=res_lay._get_name()+f".{idx}-{res_idx}"
+                            lif_states[res_lay_name]=res_lay.lif_state
+                            # print(f"lay: {res_lay_name}, scale: {res_lay.a}")
             return lif_states
 
         current_lif_states=_get_lifstate()

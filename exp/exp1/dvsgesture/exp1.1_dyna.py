@@ -16,7 +16,7 @@ from torch.utils.data import DataLoader
 from torch.nn.utils.rnn import pad_sequence
 
 
-from src.model import DynamicCSNN,CSNN
+from src.model import DynamicCSNN,CSNN,DynamicResCSNN
 from src.model import IFEncoder
 # from src.model.dynamic_snn import DynamicSNN
 
@@ -131,7 +131,7 @@ def main():
     parser.add_argument("--target",default="dyna-snn")
     args=parser.parse_args()
 
-    relativepath="20241004.dyna-snn/"
+    relativepath="20241029.dyna-snn_exp1.1/"
     resdir=Path(__file__).parent/f"{relativepath}"
     resdir.mkdir(exist_ok=True)
 
@@ -141,17 +141,21 @@ def main():
         config = yaml.safe_load(file)
 
     if config["model"]["type"]=="dynamic-snn":
-        model=DynamicCSNN(conf=config["model"])
+        # model=DynamicCSNN(conf=config["model"])
+        model=DynamicResCSNN(conf=config["model"])
+    modelname="model_best.pth"
+    model.load_state_dict(torch.load(Path(args.target)/f"result/{modelname}",map_location=device))
     model.to(device)
     model.eval()
+    model.output_mem=True #membrane potentialを出力するようにする
     print(model)
 
     # Debugging parameters of each layer
     # for name, param in model.named_parameters():
     #     print(f"Layer: {name} | Size: {param.size()} | Values : {param[:2]}")  # Print first 2 values for brevity    model.eval()
 
-    threshold=100
-    if_encoder=IFEncoder(threshold=threshold,reset=0)
+    threshold=25
+    if_encoder=IFEncoder(threshold=threshold)
 
     datapath=ROOT/"original-data"
     time_window=3000
@@ -242,7 +246,7 @@ def main():
         v1=base_v,
         v2=scaled_v,
         v3=org_v,
-        filename=f"20241004.dyna-snn/dvsgesture_{scale_type}"
+        filename=f"20241029.dyna-snn_exp1.1/dvsgesture_{scale_type}"
     )
 
     base_fr=torch.mean(base_s,dim=0)

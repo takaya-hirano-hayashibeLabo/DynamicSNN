@@ -20,7 +20,7 @@ from torch.utils.data import DataLoader
 from torch.nn.utils.rnn import pad_sequence
 
 
-from src.model import DynamicCSNN,CSNN
+from src.model import DynamicCSNN,CSNN,DynamicResCSNN
 from src.model import IFEncoder
 # from src.model.dynamic_snn import DynamicSNN
 
@@ -116,20 +116,21 @@ def main():
     parser=argparse.ArgumentParser()
     parser.add_argument("--scale_type",default="real")
     parser.add_argument("--target",default="dyna-snn")
+    parser.add_argument("--device",default=0)
     args=parser.parse_args()
 
-    relativepath="20241024.dynasnn/"
+    relativepath="20241029.dynasnn/"
     resdir=Path(__file__).parent/f"{relativepath}"
     resdir.mkdir(exist_ok=True)
 
 
-    device = "cuda:0"
+    device = f"cuda:{args.device}"
     # with open(Path(args.target)/'conf_in4.yml', 'r') as file:
     with open(Path(args.target)/'conf.yml', 'r') as file:
         config = yaml.safe_load(file)
 
     if config["model"]["type"]=="dynamic-snn":
-        model=DynamicCSNN(conf=config["model"])
+        model=DynamicResCSNN(conf=config["model"])
     model.to(device)
     model.eval()
     print(model)
@@ -137,8 +138,8 @@ def main():
     # Debugging parameters of each layer
     # for name, param in model.named_parameters():
     #     print(f"Layer: {name} | Size: {param.size()} | Values : {param[:2]}")  # Print first 2 values for brevity    model.eval(
-    a=5
-    thr=10
+    a=10
+    thr=15
     if_encoder=IFEncoder(threshold=thr)
 
     datapath=ROOT/"original-data"

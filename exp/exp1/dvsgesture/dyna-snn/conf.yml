@@ -10,14 +10,16 @@ train:
 
 model:
   type: dynamic-snn
+  cnn-type: res #resで残差ブロックCNNになる
+  res-actfn: dyna-snn
 
   in-size: 32
   in-channel: 2 
-  out-size: 5
-  hiddens: [1,4] 
-  pool-type: avg # {avg or max}
+  out-size: 11
+  hiddens: [12,32] 
+  pool-type: avg # avgにすることで,速度落としたときの1stepの情報量が落ちるようになる
   pool-size: [2,2]
-  residual-block: [2,2] #2にするとresidual blockあたり1+2層のCNNが積まれる
+  residual-block: [3,3] #2にするとresidual blockあたり1+2層のCNNが積まれる
   is-bn: false #batch normalizationするかどうか. 
   clip-norm: 1.0 #勾配クリッピングの最大勾配. 一般的に1.0が使われる
 
@@ -34,4 +36,4 @@ model:
   reset-mechanism: zero
   spike-grad: fast-sigmoid
   output-membrane: true
-  v-actf: tanh #膜電位vの活性化関数
+  # v-actf: tanh #膜電位vの活性化関数

@@ -1,0 +1,10 @@
+{
+    "model": "lstm",
+    "model_dir": "lstm",
+    "datatype": "gesture",
+    "time-scale": 7.0,
+    "acc_mean": 0.7540540540540541,
+    "acc_std": 0.01455449947874192,
+    "loss_mean": 1.8167970690876245,
+    "loss_std": 0.15611400907614667
+}

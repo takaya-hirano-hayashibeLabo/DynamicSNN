@@ -13,6 +13,23 @@ class ScalePredictor():
         self.data_trj=torch.Tensor(np.array([]))
 
 
+    def predict_scale_trajectory(self,data:torch.Tensor):
+        """
+        全stepのデータを入力とする
+        :param data: [timestep x batch x x_dim]
+        :return: [timestep x batch]
+        """
+        scale_trj=[]
+        for t in range(data.shape[0]):
+            timescale_t=self.predict_scale(data[t])
+            scale_trj.append(timescale_t)
+        scale_trj=torch.Tensor(np.array(scale_trj))
+
+        self.reset_trj()
+
+        return scale_trj
+
+
     def predict_scale(self,data:torch.Tensor):
         """
         1ステップ分のデータを入力とする

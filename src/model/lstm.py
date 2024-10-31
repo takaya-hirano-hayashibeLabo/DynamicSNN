@@ -213,18 +213,18 @@ class ResNetLSTM(nn.Module):
 
 
 
-        # self.lstm=nn.LSTM(
-        #     input_size=self.linear_hidden,
-        #     hidden_size=self.lstm_hidden,
-        #     num_layers=self.lstm_h_num,
-        # )
-
-        #pytorchのLSTMはループがC++で速すぎるためSNNと速度比較し辛い. そこで自前で実装
-        self.lstm=CustomLSTM( 
+        self.lstm=nn.LSTM(
             input_size=self.linear_hidden,
             hidden_size=self.lstm_hidden,
             num_layers=self.lstm_h_num,
         )
+
+        #pytorchのLSTMはループがC++で速すぎるためSNNと速度比較し辛い. そこで自前で実装
+        # self.lstm=CustomLSTM( 
+        #     input_size=self.linear_hidden,
+        #     hidden_size=self.lstm_hidden,
+        #     num_layers=self.lstm_h_num,
+        # )
 
 
         #>> 出力層 >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>

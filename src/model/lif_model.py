@@ -184,8 +184,11 @@ class DynamicLIF(nn.Module):
         # dv=self.dt/(tau*self.a) * ( -(self.v-self.vrest) + (self.a*self.r)*current + self.a*h ) #膜電位vの増分(リカレントあり)
         #<< リカレント接続 これをやると時間方向の表現力は上がるが, タイムスケール特性が悪くなる <<<<<<<<<<<<<<<<<<<<<<<<<<<<
 
+        tau_new=tau*self.a
+        tau_new[tau_new<self.min_tau]=self.min_tau #tauが小さくなりすぎるとdt/tauが1を超えてしまうためclippingする
         
-        dv=self.dt/(tau*self.a) * ( -(self.v-self.vrest) + (self.a*self.r)*current ) #膜電位vの増分
+        # dv=self.dt/(tau*self.a) * ( -(self.v-self.vrest) + (self.a*self.r)*torch.tanh(current) ) #テストでtanhをcurrentにかける
+        dv=(self.dt/(tau_new)) * ( -(self.v-self.vrest) + (self.a*self.r)*(current) ) #膜電位vの増分
 # 
         self.v=self.v+dv
 

@@ -199,6 +199,11 @@ def main():
                     test_acc_list_i.append(SF.accuracy_rate(outputs,targets))
                 else:
                     test_acc_list_i.append(calculate_accuracy(outputs,targets))
+
+                predict_label=torch.argmax(torch.mean(outputs,dim=0),dim=1).flatten().cpu().numpy()
+                print(f"predict label: {predict_label}")
+                print(f"true label: {targets.flatten().cpu().numpy()}")
+                print(f"acc: {np.mean(predict_label==targets.flatten().cpu().numpy())}")
             acc_mean,acc_std=np.mean(test_acc_list_i),np.std(test_acc_list_i)
             print(f"[{i_test+1}/{testnum}] ACC {acc_mean:.2f} ± {acc_std:.2f}")
 
