@@ -73,7 +73,7 @@ def main():
             model=DynamicCSNN(conf=config["model"]).to(device) # テストエポックごとにモデルを初期化する. なぜなら未学習のモデルの出力は初期重みに死ぬほど依存するから
 
         T=300
-        batch=1000 #バッチよりもモデルの初期値に依存する
+        batch=500 #バッチよりもモデルの初期値に依存する
         insize=config["model"]["in-size"]
         in_channel=config["model"]["in-channel"]
 

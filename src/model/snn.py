@@ -31,6 +31,7 @@ class SNN(nn.Module):
         self.reset_mechanism = conf["reset-mechanism"]
         if "fast".casefold() in conf["spike-grad"] and "sigmoid".casefold() in conf["spike-grad"]: 
             self.spike_grad = surrogate.fast_sigmoid()
+        self.reset_outv=conf["reset-outmem"] if "reset-outmem" in conf.keys() else True #最終層のLifをリセットするか
 
 
         modules=[]
@@ -64,9 +65,11 @@ class SNN(nn.Module):
         #>> 出力層 >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
         modules+=[
             nn.Linear(self.hiddens[-1], self.out_size,bias=is_bias),
+
+            # 出力層のLIFだけ, 膜電位のリセットbool値を与える
             LIF(
                 in_size=(self.out_size,),dt=self.dt,init_tau=self.init_tau, min_tau=self.min_tau,threshold=self.v_threshold,vrest=self.v_rest,
-                reset_mechanism=self.reset_mechanism,spike_grad=self.spike_grad,output=True,is_train_tau=self.is_train_tau
+                reset_mechanism=self.reset_mechanism,spike_grad=self.spike_grad,output=True,is_train_tau=self.is_train_tau,reset_v=self.reset_outv
             ),
         ]
         #<< 出力層 <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<

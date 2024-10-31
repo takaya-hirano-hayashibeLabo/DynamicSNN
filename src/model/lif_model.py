@@ -5,7 +5,11 @@ from math import log
 
 
 class LIF(nn.Module):
-    def __init__(self,in_size:tuple,dt,init_tau=0.5,min_tau=0.1,threshold=1.0,vrest=0,reset_mechanism="zero",spike_grad=surrogate.fast_sigmoid(),output=False,is_train_tau=True):
+    def __init__(
+            self,in_size:tuple,dt,init_tau=0.5,min_tau=0.1,threshold=1.0,vrest=0,
+            reset_mechanism="zero",spike_grad=surrogate.fast_sigmoid(),output=False,
+            is_train_tau=True,reset_v=True
+        ):
         """
         :param in_size: currentの入力サイズ
         :param dt: LIFモデルを差分方程式にしたときの⊿t. 元の入力がスパイク時系列ならもとデータと同じ⊿t. 
@@ -14,6 +18,7 @@ class LIF(nn.Module):
         :param vrest: 静止膜電位. 
         :paarm reset_mechanism: 発火後の膜電位のリセット方法の指定
         :param spike_grad: 発火勾配の近似関数
+        :param reset_v: 膜電位vをリセットするか (最終層のvを使うときだけFalseにしても良い)
         """
         super(LIF, self).__init__()
 
@@ -26,7 +31,7 @@ class LIF(nn.Module):
         self.spike_grad=spike_grad
         self.output=output
         self.v_peak=self.threshold*3
-
+        self.reset_v=reset_v
         #>> tauを学習可能にするための調整 >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
         # 参考 [https://github.com/fangwei123456/Parametric-Leaky-Integrate-and-Fire-Spiking-Neuron/blob/main/codes/models.py]
         self.is_train_tau=is_train_tau
@@ -72,8 +77,12 @@ class LIF(nn.Module):
         dv=self.dt/(tau) * ( -(self.v-self.vrest) + (self.r)*current ) #膜電位vの増分
         self.v=self.v+dv
         spike=self.__fire()
-        v_tmp=self.v*(1.0-spike) + self.v_peak*spike #リセット前の膜電位
-        self.__reset_voltage(spike)
+
+        if self.reset_v:
+            v_tmp=self.v*(1.0-spike) + self.v_peak*spike #リセット前の膜電位
+            self.__reset_voltage(spike)
+        elif not self.reset_v:
+            v_tmp=self.v #リセットしないときはピーク値への書き換えもしない
 
         if not self.output:
             return spike
@@ -105,7 +114,11 @@ class DynamicLIF(nn.Module):
     動的にtime constant(TC)が変動するLIF
     """
 
-    def __init__(self,in_size:tuple,dt,init_tau=0.5,min_tau=0.1,threshold=1.0,vrest=0,reset_mechanism="zero",spike_grad=surrogate.fast_sigmoid(),output=False, reset_v=True, v_actf=None):
+    def __init__(
+            self,in_size:tuple,dt,init_tau=0.5,min_tau=0.1,threshold=1.0,
+            vrest=0,reset_mechanism="zero",spike_grad=surrogate.fast_sigmoid(),output=False, 
+            reset_v=True, v_actf=None
+        ):
         """
         :param in_size: currentの入力サイズ
         :param dt: LIFモデルを差分方程式にしたときの⊿t. 元の入力がスパイク時系列ならもとデータと同じ⊿t. 

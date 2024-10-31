@@ -22,7 +22,7 @@ from datetime import datetime
 
 
 from src.utils import load_yaml,print_terminal,calculate_accuracy,Pool2DTransform,save_dict2json,create_windows
-from src.model import DynamicSNN,ContinuousSNN
+from src.model import DynamicSNN,ContinuousSNN,SNN
 from src.model import ThresholdEncoder
 
 
@@ -159,6 +159,8 @@ def main():
     #>> モデルの準備 >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
     if model_conf["type"]=="dynamic-snn".casefold():
         time_model=DynamicSNN(model_conf)
+    elif model_conf["type"]=="snn".casefold():
+        time_model=SNN(model_conf)
     else:
         raise ValueError(f"model type {model_conf['type']} is not supportated...")
     model=ContinuousSNN(conf["output-model"],time_model)
@@ -180,7 +182,6 @@ def main():
     else:
         raise ValueError(f"encoder type {encoder_conf['type']} is not supportated...")
     #<< encoderの準備 <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-
 
 
     #>> データの準備 >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
@@ -245,7 +246,7 @@ def main():
         overlap=0.95
     )
 
-    input_nrm_noised=input_nrm_datas+0.01*torch.randn_like(input_nrm_datas) #ノイズを加えたversion
+    input_nrm_noised=input_nrm_datas+0.05*torch.randn_like(input_nrm_datas) #ノイズを加えたversion
     input_nrm_datas=torch.cat([input_nrm_datas,input_nrm_noised],dim=0)
     target_datas=torch.cat([target_datas,target_datas],dim=0)
 

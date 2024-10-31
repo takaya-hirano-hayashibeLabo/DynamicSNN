@@ -1,0 +1,8 @@
+{
+    "timescale": 10.0,
+    "testnums": 1,
+    "lif_mean": 3.7119757507753093e-06,
+    "lif_std": 0.0,
+    "dyna_mean": 1.0239360790365026e-06,
+    "dyna_std": 0.0
+}
