@@ -1,0 +1,9 @@
+trajectory:
+  type: eight-figure #8figure trajectry
+  origin: [0.5, 0]
+  max_distance: [0.3, 0.2]
+  angle: 1.5708  # np.pi/2.0
+  num_loops: 20
+  loop_duration: 5
+  delta_time: 0.03
+  noise_std: -1
