@@ -203,9 +203,11 @@ def main():
     input_labels=["joint0","joint1","joint2","joint3","joint4","joint5"]
     # input_labels=[f"endpos_{label}" for label in ["x","y"]]
     input_datas=datasets[input_labels]
-    input_max=input_datas.max()
+
+    ignore_head=200 #最初の200データは正規化パラメータの計算で無視
+    input_max=input_datas.iloc[ignore_head:].max()
     input_max.name="max"
-    input_min=input_datas.min()
+    input_min=input_datas.iloc[ignore_head:].min()
     input_min.name="min"
     input_nrm_params=pd.concat([input_max,input_min],axis=1)
     input_nrm_params.index = input_labels
@@ -246,7 +248,7 @@ def main():
     target_nrm_params=target_nrm_params.to_dict()
     save_dict2json(target_nrm_params,resultpath/"target_nrm_params.json")
 
-    target_datas=2*((target_datas-target_min)/(target_max-target_min)).values - 1 #入力データの正規化
+    target_datas=2*((target_datas-target_min)/(target_max-target_min)).values - 1 #正解データの正規化
 
     target_datas=create_windows(
         torch.Tensor(target_datas),
