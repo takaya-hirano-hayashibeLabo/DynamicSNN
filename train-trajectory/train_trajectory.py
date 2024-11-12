@@ -206,6 +206,7 @@ def main():
 
     ignore_head=200 #最初の200データは正規化パラメータの計算で無視
     input_max=input_datas.iloc[ignore_head:].max()
+    input_max["joint4"]=1e10 #joint4は動かないので、正規化後の値はほぼ0とする
     input_max.name="max"
     input_min=input_datas.iloc[ignore_head:].min()
     input_min.name="min"
