@@ -217,7 +217,7 @@ def main():
     input_nrm_datas_diff=np.abs(np.diff(input_nrm_datas,axis=0))
     print(f"input_nrm_datas_diff min: {np.min(input_nrm_datas_diff,axis=0)}")
     print(f"input_nrm_datas_diff max: {np.max(input_nrm_datas_diff,axis=0)}")
-    exit(1)
+    # exit(1)
 
 
     input_nrm_datas=create_windows(
