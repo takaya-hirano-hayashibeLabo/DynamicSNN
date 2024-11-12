@@ -17,13 +17,14 @@ import tonic
 from torch.nn.utils.rnn import pad_sequence
 import matplotlib.pyplot as plt
 import seaborn as sns
+sns.set(style="darkgrid")
 from math import floor
 
 from src.utils import load_yaml,print_terminal,calculate_accuracy,save_dict2json,save_heatmap_video
 from src.model import DynamicCSNN,CSNN,DynamicResCSNN,ResNetLSTM,ResCSNN
 
 def plot_histogram(data, title, xlabel, ylabel, save_path):
-    plt.figure()
+    plt.figure(figsize=(8, 3))
     sns.histplot(data, bins=50, kde=True, color='blue')
     plt.title(title)
     plt.xlabel(xlabel)
