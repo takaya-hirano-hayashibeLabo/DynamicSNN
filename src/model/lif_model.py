@@ -122,7 +122,7 @@ class DynamicLIF(nn.Module):
         """
         :param in_size: currentの入力サイズ
         :param dt: LIFモデルを差分方程式にしたときの⊿t. 元の入力がスパイク時系列ならもとデータと同じ⊿t. 
-        :param init_tau: 膜電位時定数τの初期値
+        :param init_tau: 膜電位時定数τの初期値. [[tau1, rate1],[tau2, rate2],...]で指定することでその割合の指定が可能
         :param threshold: 発火しきい値
         :param vrest: 静止膜電位. 
         :paarm reset_mechanism: 発火後の膜電位のリセット方法の指定
@@ -201,7 +201,8 @@ class DynamicLIF(nn.Module):
         tau_new[tau_new<self.min_tau]=self.min_tau #tauが小さくなりすぎるとdt/tauが1を超えてしまうためclippingする
         
         # dv=self.dt/(tau*self.a) * ( -(self.v-self.vrest) + (self.a*self.r)*torch.tanh(current) ) #テストでtanhをcurrentにかける
-        dv=(self.dt/(tau_new)) * ( -(self.v-self.vrest) + (self.a*self.r)*(current) ) #膜電位vの増分
+        # dv=(self.dt/(tau_new)) * ( -(self.v-self.vrest) + (self.a*self.r)*(current) ) #膜電位vの増分
+        dv=(self.dt/tau_new) * (-(self.v-self.vrest)) + (self.dt/(tau*self.a)) * (self.a*self.r*current) #内部状態に対するtauのみclipping
 # 
         self.v=self.v+dv
 
