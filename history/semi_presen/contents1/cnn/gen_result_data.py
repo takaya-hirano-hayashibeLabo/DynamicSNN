@@ -73,59 +73,67 @@ def main():
             model=DynamicCSNN(conf=config["model"]).to(device) # テストエポックごとにモデルを初期化する. なぜなら未学習のモデルの出力は初期重みに死ぬほど依存するから
 
         T=300
-        batch=500 #バッチよりもモデルの初期値に依存する
+        batch=200 #バッチよりもモデルの初期値に依存する
         insize=config["model"]["in-size"]
         in_channel=config["model"]["in-channel"]
 
-        p=0.1
-        base_input=torch.where(
-            torch.rand(size=(T, batch, in_channel,insize,insize))<p,1.0,0.0
-        ).to(device)
-        base_s,base_i,base_v=model(base_input)
 
-        a=args.timescale  # 'a' can now be a float
-        # Create scaled_input by shifting indices by a factor of 'a'
-        scaled_input = torch.zeros(size=(int(a * T), batch, in_channel,insize,insize)).to(device)
-        if a >= 1.0:
-            kernel_size=a
-            for t in range(T):
-                scaled_index = int(a * t)
-                if scaled_index < scaled_input.shape[0]:
-                    scaled_input[scaled_index] = base_input[t]
-        else:
-            # 1次元の畳み込みを時間方向に行う処理
-            kernel_size = math.ceil(1 / a)  # カーネルサイズを設定
-            
-            # Permute base_input to bring the time dimension to the last position
-            base_input_1d = base_input.permute(1, 2, 3, 4, 0)  # (batch, channel, w, h, T)
-            
-            # Reshape for 1D convolution
-            reshaped_input = base_input_1d.view(batch * in_channel * insize * insize, T)
-            
-            # Create a weight tensor with the same number of input channels
-            weight = torch.ones(1, 1, kernel_size).to(base_input.device)
-            
-            # Apply 1D convolution along the time dimension
-            scaled_input = F.conv1d(reshaped_input.unsqueeze(1), 
-                                    weight=weight, 
-                                    stride=kernel_size).view(batch, in_channel, insize, insize, -1).permute(4, 0, 1, 2, 3)
-            
-            scaled_input[scaled_input<0.5]=0.0
-            scaled_input[scaled_input>=0.5]=1.0
+        minibatch=50
+        squared_error_lif_minibatch=[]
+        squared_error_dyna_minibatch=[]
+        for i_minibatch in tqdm(range(math.ceil(batch/minibatch))):
+            p=0.1
+            base_input=torch.where(
+                torch.rand(size=(T, minibatch, in_channel,insize,insize))<p,1.0,0.0
+            ).to(device)
+            base_s,base_i,base_v=model(base_input)
 
-            # print(scaled_input.shape)
+            a=args.timescale  # 'a' can now be a float
+            # Create scaled_input by shifting indices by a factor of 'a'
+            scaled_input = torch.zeros(size=(int(a * T), minibatch, in_channel,insize,insize)).to(device)
+            if a >= 1.0:
+                kernel_size=a
+                for t in range(T):
+                    scaled_index = int(a * t)
+                    if scaled_index < scaled_input.shape[0]:
+                        scaled_input[scaled_index] = base_input[t]
+            else:
+                # 1次元の畳み込みを時間方向に行う処理
+                kernel_size = math.ceil(1 / a)  # カーネルサイズを設定
+                
+                # Permute base_input to bring the time dimension to the last position
+                base_input_1d = base_input.permute(1, 2, 3, 4, 0)  # (batch, channel, w, h, T)
+                
+                # Reshape for 1D convolution
+                reshaped_input = base_input_1d.view(minibatch * in_channel * insize * insize, T)
+                
+                # Create a weight tensor with the same number of input channels
+                weight = torch.ones(1, 1, kernel_size).to(base_input.device)
+                
+                # Apply 1D convolution along the time dimension
+                scaled_input = F.conv1d(reshaped_input.unsqueeze(1), 
+                                        weight=weight, 
+                                        stride=kernel_size).view(minibatch, in_channel, insize, insize, -1).permute(4, 0, 1, 2, 3)
+                
+                scaled_input[scaled_input<0.5]=0.0
+                scaled_input[scaled_input>=0.5]=1.0
 
-        org_s,org_i,org_v=model.forward(scaled_input)
-        scaled_s,scaled_i,scaled_v=model.dynamic_forward_v1(scaled_input,a=torch.Tensor([a for _ in range(scaled_input.shape[0])]))
-        
-        
-        v1_resampled=F.interpolate(base_v.permute(1,2,0), size=int(a*T), mode='linear', align_corners=False).permute(-1,0,1) #基準膜電位のタイムスケール(線形補間)
-        
-        scaled_T=scaled_input.shape[0]
-        mse_lif=  np.mean((v1_resampled.to("cpu").detach().numpy()[:scaled_T]-org_v.to("cpu").detach().numpy())**2) 
-        mes_dyna= np.mean((v1_resampled.to("cpu").detach().numpy()[:scaled_T]-scaled_v.to("cpu").detach().numpy())**2) 
+                # print(scaled_input.shape)
 
-        result_trajectory.append((mse_lif,mes_dyna))
+            org_s,org_i,org_v=model.forward(scaled_input)
+            scaled_s,scaled_i,scaled_v=model.dynamic_forward_v1(scaled_input,a=torch.Tensor([a for _ in range(scaled_input.shape[0])]))
+            
+            
+            v1_resampled=F.interpolate(base_v.permute(1,2,0), size=int(a*T), mode='linear', align_corners=False).permute(-1,0,1) #基準膜電位のタイムスケール(線形補間)
+            
+            scaled_T=scaled_input.shape[0]
+            squared_error_lif_minibatch+=list(v1_resampled.to("cpu").detach().numpy()[:scaled_T]-org_v.to("cpu").detach().numpy())
+            squared_error_dyna_minibatch+=list(v1_resampled.to("cpu").detach().numpy()[:scaled_T]-scaled_v.to("cpu").detach().numpy())
+
+
+        mse_lif=np.mean(np.array(squared_error_lif_minibatch)**2)
+        mse_dyna=np.mean(np.array(squared_error_dyna_minibatch)**2)
+        result_trajectory.append((mse_lif,mse_dyna))
 
     result_trajectory=np.array(result_trajectory)
     result_dict={

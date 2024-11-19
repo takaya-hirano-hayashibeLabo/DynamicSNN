@@ -1,0 +1,11 @@
+{
+    "target": "/mnt/ssd1/hiranotakaya/master/dev/workspace/prj_202409_2MR/laplace-version/train/output/0816/gesture/v1.1/snn-tau_middle",
+    "device": "1",
+    "saveto": "test/20241116/snn-ts1.0_0.3",
+    "modelname": "model_best.pth",
+    "is_video": false,
+    "timescale1": 1.0,
+    "timescale2": 0.3,
+    "testnum": 10,
+    "test_droprate": 0.2
+}

@@ -132,19 +132,19 @@ def plot_results_facetgrid_1x4(results_db, saveto: Path, fig_conf: dict):
             return "middle"
         
     timescale_case={
-        "ts 1-5":"A",
-        "ts 5-1":"B",
-        "ts 10-5":"C",
-        "ts 5-10":"D",
+        "ts 1.0-0.3":"A",
+        "ts 1.0-5.0":"B",
+        "ts 0.3-5.0":"C",
+        "ts 5.0-0.3":"D",
     }
 
     results_db["tau-size"] = results_db["model-type"].apply(get_tau_size)
     results_db["base-model"] = results_db["model-type"].apply(lambda x: x.split("_")[0])
     results_db["time-pair"]=results_db["time-pair"].apply(lambda x: timescale_case[x])
 
-    #lstmとsmallのみを使う
+    #lstmとmiddleのみを使う
     results_db=results_db[
-        (results_db["model-type"] == "lstm") | (results_db["tau-size"] == "small")
+        (results_db["model-type"] == "lstm") | (results_db["tau-size"] == "middle")
     ]
     print(results_db)
 

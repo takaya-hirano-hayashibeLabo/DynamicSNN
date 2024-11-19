@@ -74,8 +74,8 @@ def main():
     parser.add_argument("--saveto",required=True,help="結果を保存するディレクトリ")
     parser.add_argument("--modelname",default="model_best.pth",help="モデルのファイル名")
     parser.add_argument("--is_video", action='store_true')
-    parser.add_argument("--timescale1",type=int,default=1,help="前半の速度")
-    parser.add_argument("--timescale2",type=int,default=1,help="後半の速度")
+    parser.add_argument("--timescale1",type=float,default=1,help="前半の速度")
+    parser.add_argument("--timescale2",type=float,default=1,help="後半の速度")
     parser.add_argument("--testnum",type=int,default=5,help="stdを求めるために何回testするか")
     parser.add_argument("--test_droprate",type=float,default=0.2,help="testデータにランダム性を持たせるために, 1minibatchごとにdropするrate")
     args = parser.parse_args()
@@ -194,7 +194,7 @@ def main():
 
                 seq1,seq2=int(sequence/2),int(sequence/2)
                 inputs=torch.cat(
-                    [inputs1[:seq1*timescale1],inputs2[seq1*timescale2:seq1*timescale2+seq2*timescale2]], dim=0
+                    [inputs1[:int(seq1*timescale1)],inputs2[int(seq1*timescale2):int(seq1*timescale2+seq2*timescale2)]], dim=0
                 )
 
                 #>> testデータにランダム性を持たせるために確率的にdropする >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>

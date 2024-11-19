@@ -1,0 +1,8 @@
+{
+    "model": "dynamic-snn",
+    "datatype": "gesture",
+    "timescale1": 5.0,
+    "timescale2": 0.3,
+    "acc_mean": 0.8692782391219891,
+    "acc_std": 0.011939156694545896
+}

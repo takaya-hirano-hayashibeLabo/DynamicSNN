@@ -15,7 +15,7 @@ model-color:
   lstm: 0.0
 
 model-label:
-  dynamic-snn: proposal
+  dynamic-snn: proposed
   param-snn: param-snn
   snn: snn
   lstm: lstm
