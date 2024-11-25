@@ -203,7 +203,7 @@ class DynamicLIF(nn.Module):
         # dv=self.dt/(tau*self.a) * ( -(self.v-self.vrest) + (self.a*self.r)*torch.tanh(current) ) #テストでtanhをcurrentにかける
         # dv=(self.dt/(tau_new)) * ( -(self.v-self.vrest) + (self.a*self.r)*(current) ) #膜電位vの増分
         dv=(self.dt/tau_new) * (-(self.v-self.vrest)) + (self.dt/(tau*self.a)) * (self.a*self.r*current) #内部状態に対するtauのみclipping
-# 
+        
         self.v=self.v+dv
 
         if not self.v_actf is None: #活性化関数が設定されているなら適用
