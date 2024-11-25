@@ -187,12 +187,12 @@ def main():
                 else:
 
                     # outputs=model(inputs)
-                    # outputs=model.dynamic_forward_v1(
-                    #     inputs,a=[timescale for _ in range(inputs.shape[0])]
-                    # )
-                    outputs=model.dynamic_forward(
-                        s=inputs,scale_predictor=scale_predictor
+                    outputs=model.dynamic_forward_v1(
+                        inputs,a=[1/timescale for _ in range(inputs.shape[0])]
                     )
+                    # outputs=model.dynamic_forward(
+                    #     s=inputs,scale_predictor=scale_predictor
+                    # )
 
                 val_loss.append(criterion(outputs, targets).item())
                 if "snn".casefold() in model_conf["type"]:

@@ -1,8 +1,10 @@
 from torch import nn
 from snntorch import surrogate
 import torch
+from copy import deepcopy
+from collections import OrderedDict
 
-from .lif_model import DynamicLIF,LIF
+from .lif_model import DynamicLIF,LIF,MultiLayerDynamicLIF
 
 
 
@@ -161,7 +163,7 @@ class ResidualDynaLIFBlock(ResidualBlock):
 
             #blockの出力サイズを計算
             module_outsize=get_conv_outsize(nn.Sequential(*modules),in_size=in_size,in_channel=in_channel) #[1(batch) x channel x h x w]
-            modules.append(
+            modules+=[
                 DynamicLIF(
                     in_size=tuple(module_outsize[1:]), dt=dt,
                     init_tau=init_tau, min_tau=min_tau,
@@ -169,7 +171,7 @@ class ResidualDynaLIFBlock(ResidualBlock):
                     reset_mechanism=reset_mechanism, spike_grad=spike_grad,
                     output=False, v_actf=v_actf
                 )
-            )
+            ]
             
             if dropout>0:
                 modules+=[
@@ -233,3 +235,87 @@ class ResidualDynaLIFBlock(ResidualBlock):
                     layer_num+=1
 
         return taus
+
+
+    def test_set_dynamic_param_list(self,a:list):
+        """
+        LIFの時定数&膜抵抗を変動させる関数
+        :param a: [スカラ]その瞬間の時間スケール
+        """
+        a_list_tmp=deepcopy(a)
+        for idx,layer in enumerate(self.model):
+            if isinstance(layer,DynamicLIF): #ラプラス変換によると時間スケールをかけると上手く行くはず
+                layer.a = a_list_tmp.pop(0)
+        
+        return a_list_tmp
+
+
+
+class ResidualMultiLayerDynaLIFBlock(ResidualDynaLIFBlock):
+    """
+    時間スケールを層ごとに動的に変更可能なDynamicSNN
+    """
+
+    def __init__(
+            self,in_size:tuple,in_channel,out_channel,kernel=3,stride=1,padding=1,num_block=1,bias=False,dropout=0.3,
+            dt=0.01,init_tau=0.5,min_tau=0.1,threshold=1.0,vrest=0,reset_mechanism="zero",spike_grad=surrogate.fast_sigmoid(),output=False,
+            v_actf=None, memory_lifstate=False,block_num=0,r=1.0
+            ):
+        """
+        出力は電流(=スパイクではない)
+        """
+        super(ResidualMultiLayerDynaLIFBlock,self).__init__(
+            in_channel,out_channel,kernel,stride,padding,num_block,bias,dropout,
+        )
+
+        modules=OrderedDict()
+        modules.update([
+                (f"Conv2d{0}",
+                nn.Conv2d(
+                    in_channels=in_channel,out_channels=out_channel,
+                    kernel_size=kernel,stride=stride,padding=padding,bias=bias
+                ))
+            ])
+        
+        for _ in range(num_block):
+
+            #blockの出力サイズを計算
+            module_outsize=get_conv_outsize(nn.Sequential(modules),in_size=in_size,in_channel=in_channel) #[1(batch) x channel x h x w]
+            modules.update([
+                (f"ResBlock{block_num}_MultiLayerDynamicLIF{_}",
+                MultiLayerDynamicLIF(
+                    in_size=tuple(module_outsize[1:]), dt=dt,
+                    init_tau=init_tau, min_tau=min_tau,
+                    threshold=threshold, vrest=vrest,
+                    reset_mechanism=reset_mechanism, spike_grad=spike_grad,
+                    output=False, v_actf=v_actf, memory_lifstate=memory_lifstate,
+                    r=r
+                ))
+            ])
+            
+            if dropout>0:
+                modules.update([
+                    (f"Dropout{_}",
+                    nn.Dropout2d(dropout,inplace=False))
+                ])
+            modules.update([
+                (f"Conv2d{_+1}",
+                nn.Conv2d(
+                    in_channels=out_channel,out_channels=out_channel,
+                    kernel_size=kernel,stride=stride,padding=padding,bias=bias
+                ))
+            ])
+            
+            
+        self.model=nn.Sequential(modules)
+
+        self.shortcut=nn.Sequential()
+        if not in_channel==out_channel:
+            self.shortcut=nn.Sequential(
+                    nn.Conv2d(
+                        in_channels=in_channel,out_channels=out_channel,
+                        kernel_size=1,stride=1,padding=0,bias=bias
+                    )
+            )
+
+

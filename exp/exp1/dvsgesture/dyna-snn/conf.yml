@@ -28,10 +28,10 @@ model:
   dropout: 0.2
 
 
-  dt: 0.001 #s
-  init-tau: 0.02 #dt/tauが1を超えないようにする.
-  min-tau: 0.001
-  v-threshold: 0.01
+  dt: &dt 0.0001 #s
+  init-tau: 0.04 #dt/tauが1を超えないようにする.
+  min-tau: *dt
+  v-threshold: 0.001
   v-rest: 0.0
   reset-mechanism: zero
   spike-grad: fast-sigmoid

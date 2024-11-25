@@ -22,7 +22,7 @@ from datetime import datetime
 
 
 from src.utils import load_yaml,print_terminal,calculate_accuracy,Pool2DTransform,save_dict2json
-from src.model import DynamicCSNN,CSNN,DynamicResCSNN, ResCSNN, ResNetLSTM
+from src.model import DynamicCSNN,CSNN,DynamicResCSNN, ResCSNN, ResNetLSTM, MultiLayerDynamicResCSNN
 from src.model import IFEncoder
 
 
@@ -101,6 +101,9 @@ def main():
             model=DynamicResCSNN(model_conf)
         else:
             model=DynamicCSNN(model_conf)
+        criterion=SF.ce_rate_loss()
+    elif "multilayer".casefold() in model_conf["type"]:
+        model=MultiLayerDynamicResCSNN(model_conf)
         criterion=SF.ce_rate_loss()
     elif model_conf["type"]=="snn".casefold():
         if "res".casefold() in model_conf["cnn-type"]:

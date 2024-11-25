@@ -43,6 +43,37 @@ def custom_collate_fn(batch):
 import matplotlib.pyplot as plt
 
 
+def get_avtive_elm_idx(in_spikes:torch.Tensor,batch_idx=0,view_idx_num=10):
+    """
+    :param in_spikes: [timestep x batch x xdim...]
+    """
+    in_spikes_batch_i=in_spikes[:,batch_idx]
+    in_spikes_batch_i=torch.flatten(in_spikes_batch_i,start_dim=1)
+    spike_activation=torch.mean(in_spikes_batch_i,dim=0)
+    active_elm_idx=torch.argsort(spike_activation,dim=0,descending=True)[:view_idx_num]
+    return active_elm_idx
+
+
+def plot_in_spike(in_spikes:torch.Tensor,savepath:Path,filename_prefix="in_spike",batch_idx=0,start_elm_idx=0,end_elm_idx=-1,xlim=None):
+    """
+    :param in_spikes: [timestep x batch x xdim...]
+    """
+    in_spikes_batch_i=in_spikes[:,batch_idx]
+    in_spikes_batch_i=torch.flatten(in_spikes_batch_i,start_dim=1)[:,start_elm_idx:end_elm_idx].to("cpu").detach().numpy()
+    timesteps, dim = in_spikes_batch_i.shape
+
+    plt.figure(figsize=(15, 15))
+    for d in range(dim):
+        plt.plot(range(timesteps),in_spikes_batch_i[:,d]*d,label=f"dim{d}",marker="o",linestyle="None")
+    if xlim is not None:
+        plt.xlim(xlim)
+    plt.ylim([0.5,dim+0.5])
+    plt.grid(True)
+    plt.savefig(savepath/f"{filename_prefix}_batch{batch_idx}_start{start_elm_idx}_end{end_elm_idx}.png")
+    plt.close()
+
+
+
 def plot_lif_states(lif_states, savepath:Path, batch_index=0, filename_prefix="lif_state"):
     """
     Plots the time series graphs for current, volt, and outspike for the last layer in lif_states
@@ -119,7 +150,7 @@ def main():
     parser.add_argument("--device",default=0)
     args=parser.parse_args()
 
-    relativepath="20241029.dynasnn/"
+    relativepath="20241120.dynasnn/"
     resdir=Path(__file__).parent/f"{relativepath}"
     resdir.mkdir(exist_ok=True)
 
@@ -138,15 +169,15 @@ def main():
     # Debugging parameters of each layer
     # for name, param in model.named_parameters():
     #     print(f"Layer: {name} | Size: {param.size()} | Values : {param[:2]}")  # Print first 2 values for brevity    model.eval(
-    a=10
-    thr=15
+    a=5
+    thr=50
     if_encoder=IFEncoder(threshold=thr)
 
     datapath=ROOT/"original-data"
     time_window=3000
     insize=config["model"]["in-size"]
     batch_size=5
-    time_sequence=300
+    time_sequence=50
     transform=torchvision.transforms.Compose([
         tonic.transforms.Denoise(filter_time=10000),
         tonic.transforms.Downsample(sensor_size=tonic.datasets.DVSGesture.sensor_size,target_size=(insize,insize)),
@@ -162,10 +193,13 @@ def main():
     # base_in=np.array([testset[i][0][:time_sequence] for i in range(batch_size)])
     base_in,_=next(iter(testloader))
     base_in=base_in[:,:time_sequence]
-    # plot_histogram(base_in,title="basein",filename=relativepath+"basein")
+    plot_histogram(base_in,title="basein",filename=relativepath+"basein")
     # base_in[base_in>0]=1.0 #スパイククリップ
     base_in=if_encoder(base_in)
     base_in=torch.Tensor(base_in).permute(1,0,2,3,4)
+    active_elm_idx=get_avtive_elm_idx(base_in.to(device).to(torch.float))
+    print(f"active_elm_idx: {active_elm_idx}")
+
     with torch.no_grad():
         base_s,_,base_v=model.forward(base_in.to(device).to(torch.float))
     # print(f"input shape: {base_in.shape}, out spike shape: {base_s.shape}")
@@ -177,7 +211,9 @@ def main():
         )
     plot_lif_states(lif_states,resdir/f"lifstates_insize{insize}_window{time_window}_thr{thr}_a{a}/base")
 
-
+    plot_elm_size=128
+    plot_in_spike(base_in,resdir/f"lifstates_insize{insize}_window{time_window}_thr{thr}_a{a}/base",
+                  start_elm_idx=active_elm_idx[0],end_elm_idx=active_elm_idx[0]+plot_elm_size,xlim=(0,time_sequence))
     scale_type=args.scale_type
 
     #>> real #>>>>>>>>>>>>>>>>>
@@ -206,9 +242,11 @@ def main():
     with torch.no_grad():
         lif_states=model.dynamic_forward_v1_with_lifstate(
             scaled_in.to(device).to(torch.float),
-            a=torch.Tensor([alpha*a for _ in range(scaled_in.shape[0])])
+            a=torch.Tensor([1 for _ in range(scaled_in.shape[0])])
             )
         plot_lif_states(lif_states,resdir/f"lifstates_insize{insize}_window{time_window}_thr{thr}_a{a}/real")
+    plot_in_spike(scaled_in,resdir/f"lifstates_insize{insize}_window{time_window}_thr{thr}_a{a}/real",
+                  start_elm_idx=active_elm_idx[0],end_elm_idx=active_elm_idx[0]+plot_elm_size,xlim=(0,int(a*time_sequence)))
 
 
 
@@ -216,19 +254,23 @@ def main():
     alpha=1.0
     input_size = config["model"]["in-size"]
     in_channel=config["model"]["in-channel"]
-    scaled_in = torch.zeros(size=(int(a * time_sequence), batch_size, in_channel,input_size,input_size)).to(device)
+    scaled_in_ideal = torch.zeros(size=(int(a * time_sequence), batch_size, in_channel,input_size,input_size)).to(device)
     for t in range(time_sequence):
         scaled_index = int(a * t)
         if scaled_index < scaled_in.shape[0]:
-            scaled_in[scaled_index] = base_in[t]
+            scaled_in_ideal[scaled_index] = base_in[t]
 
     with torch.no_grad():
         lif_states=model.dynamic_forward_v1_with_lifstate(
-            scaled_in.to(device).to(torch.float),
-            a=torch.Tensor([alpha*a for _ in range(scaled_in.shape[0])])
+            scaled_in_ideal.to(device).to(torch.float),
+            a=torch.Tensor([alpha*a for _ in range(scaled_in_ideal.shape[0])])
             )
         plot_lif_states(lif_states,resdir/f"lifstates_insize{insize}_window{time_window}_thr{thr}_a{a}/ideal")
+    plot_in_spike(scaled_in_ideal,resdir/f"lifstates_insize{insize}_window{time_window}_thr{thr}_a{a}/ideal",
+                  start_elm_idx=active_elm_idx[0],end_elm_idx=active_elm_idx[0]+plot_elm_size,xlim=(0,int(a*time_sequence)))
 
+    actual_error=torch.sum(torch.abs(scaled_in.to("cpu").detach()-scaled_in_ideal.to("cpu").detach()))
+    print(f"actual_error: {actual_error}")
 
 if __name__=="__main__":
     main()
