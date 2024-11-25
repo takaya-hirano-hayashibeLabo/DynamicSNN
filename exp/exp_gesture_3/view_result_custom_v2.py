@@ -143,9 +143,15 @@ def plot_results_facetgrid_1x4(results_db, saveto: Path, fig_conf: dict):
     results_db["time-pair"]=results_db["time-pair"].apply(lambda x: timescale_case[x])
 
     #lstmとmiddleのみを使う
+    # results_db=results_db[
+    #     (results_db["model-type"] == "lstm") | (results_db["tau-size"] == "middle")
+    # ]
+
+    #middleのみを使う (LSTMなし)
     results_db=results_db[
-        (results_db["model-type"] == "lstm") | (results_db["tau-size"] == "middle")
+        (results_db["tau-size"] == "middle") & (results_db["model-type"] != "lstm")
     ]
+
     print(results_db)
 
     # Set up the FacetGrid with specified column order

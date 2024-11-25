@@ -1,0 +1,9 @@
+{
+    "device": "2",
+    "saveto": "20241119_result",
+    "timescale1": 1.0,
+    "timescale2": 5.0,
+    "sequence": 300,
+    "timewindow": 3000,
+    "insize": 128
+}

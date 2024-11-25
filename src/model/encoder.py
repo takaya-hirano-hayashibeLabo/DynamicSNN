@@ -4,6 +4,54 @@
 """
 import torch
 
+class DiffIFEncoder():
+    """
+    変化量の積分発火(Integrated Firing)のエンコーダ
+    IFEncoderをさらに変化量で考えたもの  
+    これによって、停滞しているときにスパイクが出ないようになる??  
+    """
+    def __init__(self,threshold,device="cpu"):
+        self.threshold=threshold #発火の閾値
+        self.device=device
+        self.skip_ndim=2
+
+    def __call__(self,x:torch.Tensor):
+        """
+        イベントデータは1クリップしてないものを入力する
+        :param x: [N x T x xdim]
+        :return out_spikes: [N x T x xdim]
+        """
+        if not isinstance(x,torch.Tensor):
+            x=torch.Tensor(x).to(self.device)
+
+        print(torch.max(torch.abs(torch.diff(x,dim=1))))
+
+        N,T=x.shape[0],x.shape[1]
+        internal_state=torch.zeros(size=(N,)+self._get_xdim(x)).to(self.device)
+        out_spikes=torch.zeros_like(x).to(self.device)
+        for t in range(T-1):
+            dstate=(x[:,t+1]-x[:,t]) #変化量を足し合わせていく
+            dstate[dstate<0]=0 #負の変化量は無視
+            internal_state+=dstate
+            out_spikes[:,t+1]=torch.where(self._is_over_threshold(internal_state),1.0,0.0).to(self.device)
+            internal_state=self._reset_internal_state(internal_state)
+        return out_spikes
+    
+    def _get_xdim(self,x:torch.Tensor):
+        xdim_size=tuple(
+            x.shape[i+self.skip_ndim] for i in range(x.ndim-self.skip_ndim)
+        ) #2次元目以降の次元サイズ
+        return xdim_size
+            
+    def _is_over_threshold(self,internal_state):
+        return internal_state>=self.threshold
+
+    def _reset_internal_state(self,internal_state:torch.Tensor):
+        new_internal_state=internal_state.clone().detach().to(self.device)
+        new_internal_state[self._is_over_threshold(internal_state)]-=self.threshold
+        return new_internal_state
+
+
 class IFEncoder():
     """
     積分発火(Integrated Firing)のエンコーダ
@@ -177,8 +225,6 @@ class DirectCSNNEncoder(nn.Module):
 
         self.in_size = conf["in-size"]
         self.in_channel = conf["in-channel"]
-        self.pool_type = conf["pool-type"]
-        
         self.output_mem=conf["output-membrane"]
         self.dt = conf["dt"]
         self.init_tau = conf["init-tau"]
@@ -187,17 +233,18 @@ class DirectCSNNEncoder(nn.Module):
         self.v_threshold = conf["v-threshold"]
         self.v_rest = conf["v-rest"]
         self.reset_mechanism = conf["reset-mechanism"]
-        if "fast".casefold() in conf["spike-grad"] and "sigmoid".casefold() in conf["spike-grad"]: 
+        if "fast".casefold() in conf["spike-grad"]: 
             self.spike_grad = surrogate.fast_sigmoid()
 
 
         modules=[]
 
         modules+=[
-            nn.Conv2d(
-                in_channels=self.in_channel,out_channels=self.in_channel,
-                kernel_size=3,stride=1,padding=1,bias=True
-            ),
+            # nn.Conv2d(
+            #     in_channels=self.in_channel,out_channels=self.in_channel,
+            #     kernel_size=3,stride=1,padding=1,bias=True
+            # ),
+            nn.AvgPool2d(3,1,1),
             LIF(
                 in_size=(self.in_channel,self.in_size,self.in_size), dt=self.dt,
                 init_tau=self.init_tau, min_tau=self.min_tau,
@@ -222,4 +269,15 @@ class DirectCSNNEncoder(nn.Module):
         """
         :param x: [batch x xdim...]
         """
-        return self.model(x)
+        return self.model(x/50)
+    
+    def forward(self,x:torch.Tensor):
+        """
+        :param x :[timestep x batch x xdim...]
+        :return out_spikes: [timestep x batch x xdim...]
+        """
+
+        out_spikes=[]
+        for t in range(x.shape[0]):
+            out_spikes.append(self.step_forward(x[t]))
+        return torch.stack(out_spikes)

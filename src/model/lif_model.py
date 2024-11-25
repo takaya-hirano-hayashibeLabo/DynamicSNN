@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from snntorch import surrogate
 from math import log
-
+from torch.utils.data import DataLoader
 
 class LIF(nn.Module):
     def __init__(
@@ -220,7 +220,7 @@ class DynamicLIF(nn.Module):
             v_tmp=self.v #リセットしないときはピーク値への書き換えもしない
         
         # self.spike_prev=spike.detach().clone() #以前のスパイクを記憶
-        # self._set_state(current,v_tmp,spike) #状態を記憶 見たいときにオンにする
+        self._set_state(current,v_tmp,spike) #状態を記憶 見たいときにオンにする
 
         if not self.output:
             return spike
@@ -255,3 +255,95 @@ class DynamicLIF(nn.Module):
             "volt":volt,
             "outspike":outspike
         }
+
+
+
+class MultiLayerDynamicLIF(DynamicLIF):
+    """
+    レイヤごとに動的にパラメータを動かすDynamicLIF
+    これによって、若干時間方向に入力データがぶれてもなんとかなるはず
+    """
+    def __init__(
+            self,in_size:tuple,dt,init_tau=0.5,min_tau=0.1,threshold=1.0,
+            vrest=0,reset_mechanism="zero",spike_grad=surrogate.fast_sigmoid(),
+            output=False, reset_v=True, v_actf=None, memory_lifstate=False,r=1.0
+            ):
+        super(MultiLayerDynamicLIF, self).__init__(in_size,dt,init_tau,min_tau,threshold,vrest,reset_mechanism,spike_grad,output,reset_v,v_actf)
+
+        self.r=r
+
+        self.memory_lifstate=memory_lifstate
+        self.base_firing_rate=None
+
+        self.base_firing_rate_list=[]
+    
+    def forward(self,current:torch.Tensor):
+        """
+        :param current: シナプス電流 [batch x ...]
+        """
+
+
+        device = current.device  # Get the device of the input tensor
+
+        # Move v and w to the same device as current if they are not already
+        if isinstance(self.v,torch.Tensor):
+            if self.v.device != device:
+                self.v = self.v.to(device)
+        if self.w.device != device:
+            self.w = self.w.to(device)
+        tau=self.min_tau+self.w.sigmoid() #tauが小さくなりすぎるとdt/tauが1を超えてしまう
+
+
+        tau_new=tau*self.a
+        tau_new[tau_new<self.min_tau]=self.min_tau #tauが小さくなりすぎるとdt/tauが1を超えてしまうためclippingする
+        
+        dv=(self.dt/tau_new) * (-(self.v-self.vrest)) + (self.dt/(tau*self.a)) * (self.a*self.r*current) #内部状態に対するtauのみclipping
+# 
+        self.v=self.v+dv
+
+        if not self.v_actf is None: #活性化関数が設定されているなら適用
+            self.v=self.v_actf(self.v)
+
+        spike=self.__fire() 
+
+        
+
+        if self.reset_v: 
+            v_tmp=self.v*(1.0-spike) + self.v_peak*spike #spikeがたった膜電位をピーク値にする(描画用)
+            self.__reset_voltage(spike)
+        else:
+            v_tmp=self.v #リセットしないときはピーク値への書き換えもしない
+        
+        if self.memory_lifstate: 
+            self._set_state(current,v_tmp,spike) #状態を記憶 
+
+        if not self.output:
+            return spike
+        else:
+            return spike, (current,v_tmp) #spikeに加えて, (シナプス電流, 膜電位)を返す
+
+
+    def __fire(self)->torch.Tensor:
+        v_shift=self.v-self.threshold
+        spike=self.spike_grad(v_shift)
+        return spike
+    
+
+    def __reset_voltage(self,spike):
+        
+        if self.reset_mechanism=="zero":
+            self.v=self.v*(1-spike.float())
+        elif self.reset_mechanism=="subtract":
+            self.v=self.v-self.threshold
+
+    def _set_state(self,current:torch.Tensor,volt:torch.Tensor,outspike:torch.Tensor):
+        """
+        各時刻の各層のデータを保存したいときに使う
+        """
+        self.lif_state={
+            "current":current,
+            "volt":volt,
+            "outspike":outspike
+        }
+
+

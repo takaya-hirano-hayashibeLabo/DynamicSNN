@@ -3,10 +3,12 @@ import torch.nn as nn
 from snntorch import surrogate
 from math import log
 from tqdm import tqdm
+from torch.utils.data import DataLoader
+from collections import OrderedDict
 
-from .residual_block import ResidualBlock, ResidualDynaLIFBlock
+from .residual_block import ResidualBlock, ResidualDynaLIFBlock,ResidualMultiLayerDynaLIFBlock
 from .scale_predictor import ScalePredictor
-from .lif_model import DynamicLIF
+from .lif_model import DynamicLIF, MultiLayerDynamicLIF
 
 
 
@@ -102,7 +104,7 @@ class DynamicSNN(nn.Module):
         LIFの時定数&膜抵抗を変動させる関数
         :param a: [スカラ]その瞬間の時間スケール
         """
-        for layer in self.model:
+        for idx,layer in enumerate(self.model):
             if isinstance(layer,DynamicLIF):  #ラプラス変換によると時間スケールをかけると上手く行くはず
                 layer.a = a
             elif  isinstance(layer,ResidualDynaLIFBlock):
@@ -334,6 +336,43 @@ class DynamicSNN(nn.Module):
 
 
 
+    def __test_set_dynamic_param_list(self,a:list):
+        """
+        LIFの時定数&膜抵抗を変動させる関数
+        :param a: [スカラ]その瞬間の時間スケール
+        """
+        from copy import deepcopy
+
+        a_list_tmp=deepcopy(a)
+        for idx,layer in enumerate(self.model):
+            if isinstance(layer,DynamicLIF):  #ラプラス変換によると時間スケールをかけると上手く行くはず
+                layer.a = a_list_tmp.pop(0)
+            elif  isinstance(layer,ResidualDynaLIFBlock):
+                a_list_tmp=deepcopy(layer.test_set_dynamic_param_list(a_list_tmp))
+
+
+    def test_dynamic_forward_multi_a_with_lifstate(self,s:torch.Tensor,a:list):
+        lif_states={}
+
+
+        self.model.eval() #絶対学習しない
+
+        T=s.shape[0]
+        self.__init_lif()
+
+        for t in range(T):
+
+            with torch.no_grad():
+                self.__test_set_dynamic_param_list(a) #層ごとにスケールを変える
+                st, (it,vt)=self.model(s[t])
+                lif_states=self._lifstate_collection(lif_states)
+
+
+        self.__reset_params()
+
+        return lif_states
+
+
 
     def dynamic_forward_genseq(self,s:torch.Tensor,a:float,head_idx:int):
         """
@@ -371,6 +410,27 @@ class DynamicSNN(nn.Module):
         elif not self.output_mem:
             return out_s
 
+
+
+    def split_weight_decay_params(self, no_decay_param_names:list=["w","bias"], weight_decay:float=0.01):
+        """
+        weight decayを適用するパラメータと適用しないパラメータを分ける  
+        L2正則化は基本的に重みのみ (biasや時定数には適用しない)
+        """
+        decay_params=[]
+        no_decay_params=[]
+        for name,param in self.model.named_parameters():
+            if any(nd in name for nd in no_decay_param_names):
+                no_decay_params.append(param)
+            else:
+                decay_params.append(param)
+
+        split_params=[
+            {"params":decay_params,"weight_decay":weight_decay},
+            {"params":no_decay_params,"weight_decay":0.0}
+        ]
+
+        return split_params
 
 
 
@@ -691,7 +751,250 @@ class DynamicResCSNN(DynamicSNN):
 
 
 
+def create_residual_multi_layer_dynasnn_block(
+        in_size,in_channel,out_channel,kernel,stride,padding,is_bias,residual_block_num,is_bn,pool_type,pool_size,dropout,
+        lif_dt,lif_init_tau,lif_min_tau,lif_threshold,lif_vrest,lif_reset_mechanism,lif_spike_grad,lif_output,
+        res_actfn="relu",v_actf=None, block_num=0, memory_lifstate=False,r=1.0
+        ):
+    """
+    param: in_size: 幅と高さ (正方形とする)
+    param: in_channel: channel size
+    param: out_channel: 出力チャネルのサイズ
+    param: kernel: カーネルサイズ
+    param: stride: ストライドのサイズ
+    param: padding: パディングのサイズ
+    param: is_bias: バイアスを使用するかどうか
+    param: residual_block_num: ResBlock内のCNNの数 (0でもいい)
+    param: is_bn: バッチ正規化を使用するかどうか
+    param: pool_type: プーリングの種類 ("avg"または"max")
+    param: pool_size: プールのサイズ
+    param: dropout: dropout rate
+    param: lif_dt: LIFモデルの時間刻み
+    param: lif_init_tau: LIFの初期時定数
+    param: lif_min_tau: LIFの最小時定数
+    param: lif_threshold: LIFの発火しきい値
+    param: lif_vrest: LIFの静止膜電位
+    param: lif_reset_mechanism: LIFの膜電位リセットメカニズム
+    param: lif_spike_grad: LIFのスパイク勾配関数
+    param: lif_output: LIFの出力を返すかどうか
+    param: res_actfn: 残差ブロックの活性化関数
+    param: v_actf: 膜電位vの活性化関数
+    param: memory_lifstate: 各層のLIFの内部状態を記憶するかどうか
+    param: block_num: ブロックの番号
+    param: r: 膜抵抗
+    """
+    
+    block=OrderedDict()
+    if res_actfn=="dyna-snn":
+        block.update([
+            (f"ResBlock{block_num}",
+            ResidualMultiLayerDynaLIFBlock(
+                in_channel=in_channel,out_channel=out_channel,
+                kernel=kernel,stride=stride,padding=padding,
+                num_block=residual_block_num,bias=is_bias,
+                in_size=in_size, dt=lif_dt,
+                init_tau=lif_init_tau, min_tau=lif_min_tau,
+                threshold=lif_threshold, vrest=lif_vrest,
+                reset_mechanism=lif_reset_mechanism, spike_grad=surrogate.fast_sigmoid(),
+                output=False, v_actf=v_actf, memory_lifstate=memory_lifstate, block_num=block_num, r=r,
+                dropout=dropout
+            ))
+        ])
 
+    if is_bn:
+        block.update([
+            (f"BatchNorm2d{block_num}",
+            nn.BatchNorm2d(out_channel))
+        ])
+
+    if pool_size>0:
+        if pool_type=="avg".casefold():
+            block.update([
+                (f"AvgPool2d{block_num}",
+                nn.AvgPool2d(pool_size))
+            ])
+        elif pool_type=="max".casefold():
+            block.update([
+                (f"MaxPool2d{block_num}",
+                nn.MaxPool2d(pool_size))
+            ])
+
+    #blockの出力サイズを計算
+    block_outsize=get_conv_outsize(nn.Sequential(block),in_size=in_size,in_channel=in_channel) #[1(batch) x channel x h x w]
+
+    block.update([
+        (f"ResBlock{block_num}_MultiLayerDynamicLIF_Out",
+        MultiLayerDynamicLIF(
+            in_size=tuple(block_outsize[1:]), dt=lif_dt,
+            init_tau=lif_init_tau, min_tau=lif_min_tau,
+            threshold=lif_threshold, vrest=lif_vrest,
+            reset_mechanism=lif_reset_mechanism, spike_grad=lif_spike_grad,
+            output=lif_output, v_actf=v_actf, memory_lifstate=memory_lifstate, r=r
+            ))
+    ])
+
+    if dropout>0:
+        block.update([
+            (f"ResBlock{block_num}_Dropout",
+            nn.Dropout2d(dropout, inplace=False))
+        ])
+    
+    return block, block_outsize
+
+
+
+class MultiLayerDynamicResCSNN(DynamicSNN):
+    """
+    時間スケールを層ごとに動的に変更可能なDynamicSNN  
+    これによって、多少時間方向に入力がズレていても、内部状態の制御ができるかもしれない
+    """
+
+    def __init__(self,conf:dict):
+        super(MultiLayerDynamicResCSNN,self).__init__(conf)
+
+        self.in_size = conf["in-size"]
+        self.in_channel = conf["in-channel"]
+        self.out_size = conf["out-size"]
+        self.hiddens = conf["hiddens"]
+        self.residual_blocks=conf["residual-block"] #残差ブロックごとのCNNの数
+        self.pool_type = conf["pool-type"]
+        self.pool_size=conf["pool-size"]
+        self.is_bn = conf["is-bn"]
+        self.linear_hidden = conf["linear-hidden"] if isinstance(conf["linear-hidden"],list) else [conf["linear-hidden"]]
+        self.dropout = conf["dropout"]
+        self.res_actfn=conf["res-actfn"] if "res-actfn" in conf.keys() else "relu"
+        
+        self.output_mem=conf["output-membrane"]
+        self.dt = conf["dt"]
+        self.init_tau = conf["init-tau"]
+        self.min_tau=conf["min-tau"]
+        self.v_threshold = conf["v-threshold"]
+        self.v_rest = conf["v-rest"]
+        self.reset_mechanism = conf["reset-mechanism"]
+        if "fast".casefold() in conf["spike-grad"] and "sigmoid".casefold() in conf["spike-grad"]: 
+            self.spike_grad = surrogate.fast_sigmoid()
+        self.v_actf=conf["v-actf"] if "v-actf" in conf.keys() else None
+        self.r=conf["r"] if "r" in conf.keys() else 1.0
+
+        is_bias=False #基本falseじゃないとラプラス変換の関係式が成り立たない
+
+        self.memory_lifstate=conf["memory-lifstate"] if "memory-lifstate" in conf.keys() else False
+        self.firing_rate_window=conf["firing-rate-window"] if "firing-rate-window" in conf.keys() else 100
+
+
+        modules=OrderedDict()
+
+        #>> 畳み込み層 >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+        in_c=self.in_channel
+        in_size=self.in_size
+        for i,hidden_c in enumerate(self.hiddens):
+
+            block,block_outsize=create_residual_multi_layer_dynasnn_block(
+                in_size=in_size, in_channel=in_c, out_channel=hidden_c,
+                kernel=3, stride=1, padding=1,  # カーネルサイズ、ストライド、パディングの設定
+                is_bias=is_bias, residual_block_num=self.residual_blocks[i],
+                is_bn=self.is_bn, pool_type=self.pool_type,pool_size=self.pool_size[i],dropout=self.dropout,
+                lif_dt=self.dt, lif_init_tau=self.init_tau, lif_min_tau=self.min_tau,
+                lif_threshold=self.v_threshold, lif_vrest=self.v_rest,
+                lif_reset_mechanism=self.reset_mechanism, lif_spike_grad=self.spike_grad,
+                lif_output=False,  # 出力を返さない設定
+                res_actfn=self.res_actfn, v_actf=self.v_actf, memory_lifstate=self.memory_lifstate,
+                block_num=i, r=self.r
+            )
+            modules.update(block)
+            in_c=hidden_c
+            in_size=block_outsize[-1]
+        #<< 畳み込み層 <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+
+
+
+        #>> 線形層 >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+        modules.update([
+            (f"Flatten",
+            nn.Flatten())
+        ])
+        in_size=block_outsize[1]*block_outsize[2]*block_outsize[3]
+        for idx,h in enumerate(self.linear_hidden):
+            modules.update([
+                (f"Linear{idx}",
+                nn.Linear(in_size,h,bias=is_bias)),
+                (f"Linear_MultiLayerDynamicLIF{idx}",
+                MultiLayerDynamicLIF(
+                    in_size=(h,),dt=self.dt,init_tau=self.init_tau, 
+                    min_tau=self.min_tau,threshold=self.v_threshold,vrest=self.v_rest,
+                    reset_mechanism=self.reset_mechanism,
+                    spike_grad=self.spike_grad,output=False, v_actf=self.v_actf, 
+                    memory_lifstate=self.memory_lifstate, r=self.r
+                ))
+            ])
+            if self.dropout>0:
+                modules.update([
+                    (f"Dropout{idx}",
+                    nn.Dropout(self.dropout,inplace=False))
+                ])
+            in_size=h
+        modules.update([
+            (f"Linear{idx+1}",
+            nn.Linear(in_size,self.out_size,bias=is_bias)),
+            (f"Linear_MultiLayerDynamicLIF_Out",
+            MultiLayerDynamicLIF(
+                in_size=(self.out_size,),dt=self.dt,init_tau=self.init_tau, 
+                min_tau=self.min_tau,threshold=self.v_threshold,vrest=self.v_rest,
+                reset_mechanism=self.reset_mechanism,
+                spike_grad=self.spike_grad,output=True, 
+                v_actf=self.v_actf, memory_lifstate=self.memory_lifstate,
+                r=self.r
+            ))
+        ])
+        #<< 線形層 <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+
+
+        self.model=nn.Sequential(modules)
+
+
+    def memory_base_firing_rate(self,dataloader:DataLoader,device:torch.device,sequence:int=100,encoder=torch.nn.Identity()):
+        """
+        基準となるの発火率を記録する
+        """
+
+        firing_rates={} #各層ごとの出力スパイクのバッチ平均発火率を時系列で記録する
+
+        spike_length=sequence+self.firing_rate_window #windowを足した分の長さを使う
+        for batch_idx, (inputs, _) in enumerate(dataloader):
+            inputs=inputs.to(device).to(torch.float)
+            if inputs.shape[1]>spike_length:
+                inputs=inputs[:,:spike_length] #シーケンスの長さを指定
+
+            inputs=encoder(inputs) #エンコーダーを通す(0か1に変換)
+            inputs=inputs.permute((1,0,*[i+2 for i in range(inputs.ndim-2)]))
+            lifstates=self.dynamic_forward_v1_with_lifstate(inputs,a=torch.Tensor([1 for _ in range(inputs.shape[0])])) #DynaLIFの内部状態を記録
+            
+            for lif_name,lif_state in lifstates.items():
+                if lif_name not in firing_rates.keys():
+                    firing_rates[lif_name]=[]
+                firing_rate_trj=self.__calc_firing_rate(lif_state["outspike"]).permute((1,0)) #[batch x T]
+                firing_rates[lif_name].append(self.__calc_firing_rate(lif_state["outspike"]))
+
+        for lif_name,lif_rate_trj in firing_rates.items():
+            firing_rate_trj=torch.cat(lif_rate_trj,dim=0)
+            firing_rate_trj=torch.mean(firing_rate_trj,dim=0) #各時刻の発火率のバッチ平均
+            firing_rates[lif_name]=firing_rate_trj
+
+        return firing_rates
+
+
+    def __calc_firing_rate(self,in_spikes:torch.Tensor):
+        """
+        発火率を計算する
+        :param in_spikes: [T+window x batch x ...]
+        :return: [T x batch]
+        """
+
+        firing_rate_list=[]
+        for t in range(in_spikes.shape[0]-self.firing_rate_window):
+            firing_rate_list.append(torch.mean(in_spikes[t:t+self.firing_rate_window],dim=0))
+        firing_rate=torch.cat(firing_rate_list,dim=0)
+        return firing_rate
 
 
 

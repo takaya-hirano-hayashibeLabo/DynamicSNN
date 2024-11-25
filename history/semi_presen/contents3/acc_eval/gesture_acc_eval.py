@@ -248,13 +248,13 @@ def main():
                 # outputs=model(inputs)
 
                 # print(a[:int(50)])
-                # outputs=model.dynamic_forward_v1(
-                #     inputs,a=timescale*torch.ones(inputs.shape[0])
-                # )
-
-                outputs=model.dynamic_forward(
-                    s=inputs,scale_predictor=scale_predictor
+                outputs=model.dynamic_forward_v1(
+                    inputs,a=timescale*torch.ones(inputs.shape[0])
                 )
+
+                # outputs=model.dynamic_forward(
+                #     s=inputs,scale_predictor=scale_predictor
+                # )
 
             val_loss.append(criterion(outputs, targets).item())
 
@@ -263,10 +263,10 @@ def main():
             else:
                 predict_label=torch.argmax(outputs,dim=1).to("cpu").detach().flatten().numpy()
             targets=targets.to("cpu").detach().flatten().numpy()
-            # print(f"predict_label: {predict_label}")
-            # print(f"targets: {targets}")
-            # acc=np.mean((predict_label==targets).astype(float))
-            # print(f"acc: {acc}")
+            print(f"predict_label: {predict_label}")
+            print(f"targets: {targets}")
+            acc=np.mean((predict_label==targets).astype(float))
+            print(f"acc: {acc}")
 
             labels+=[
                 (label_p,label_t) for label_p,label_t in zip(predict_label,targets)

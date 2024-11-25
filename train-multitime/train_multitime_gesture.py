@@ -22,7 +22,7 @@ from datetime import datetime
 
 
 from src.utils import load_yaml,print_terminal,calculate_accuracy,Pool2DTransform,save_dict2json
-from src.model import DynamicCSNN,CSNN,DynamicResCSNN, ResCSNN, ResNetLSTM
+from src.model import DynamicCSNN,CSNN,DynamicResCSNN, ResCSNN, ResNetLSTM, MultiLayerDynamicResCSNN
 
 
 def plot_and_save_curves(result, resultpath, epoch):
@@ -101,6 +101,9 @@ def main():
         else:
             model=DynamicCSNN(model_conf)
         criterion=SF.ce_rate_loss()
+    elif "multilayer".casefold() in model_conf["type"]:
+        model=MultiLayerDynamicResCSNN(model_conf)
+        criterion=SF.ce_rate_loss()
     elif model_conf["type"]=="snn".casefold():
         if "res".casefold() in model_conf["cnn-type"]:
             model=ResCSNN(model_conf)
@@ -114,7 +117,20 @@ def main():
         raise ValueError(f"model type {model_conf['type']} is not supportated...")
     print(model)
     model.to(device)
-    optim=torch.optim.Adam(model.parameters(),lr=train_conf["lr"])
+
+    weight_decay=train_conf["weight-decay"] if "weight-decay" in train_conf else 0.0
+    model_params=model.split_weight_decay_params( #正則化をかけるパラメータとかけないパラメータを分ける
+        no_decay_param_names=["w","bias"], #wは時定数の逆数
+        weight_decay=weight_decay
+    )
+
+    optim_type=train_conf["optim"] if "optim" in train_conf else "Adam"
+    if optim_type=="Adam":
+        optim=torch.optim.Adam(model_params,lr=train_conf["lr"])
+    elif optim_type=="AdamW": #weight decayを利用する場合は, weight decayを正しく実装したAdamWを使う
+        optim=torch.optim.AdamW(model_params,lr=train_conf["lr"])
+
+
     if train_conf["schedule-step"]>0:   
         scheduler=StepLR(optimizer=optim,step_size=train_conf["schedule-step"],gamma=train_conf["schedule-rate"])
     #<< モデルの準備 <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
