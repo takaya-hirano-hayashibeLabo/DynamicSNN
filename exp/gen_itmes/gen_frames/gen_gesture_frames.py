@@ -54,6 +54,10 @@ def main():
     sequence=args.sequence
     framenum=args.framenum
 
+    savedir=Path(__file__).parent/f"timewindow{timewindow}"
+    if not os.path.exists(savedir):
+        os.makedirs(savedir)
+
     print(tonic.datasets.DVSGesture.classes, len(tonic.datasets.DVSGesture.classes))
 
     #>> データの準備 >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
@@ -95,7 +99,7 @@ def main():
                 if t%skip_frames==0:
                     frame_np=frame_i.to("cpu").detach().numpy()
                     frame_np=1.5*frame_np[0]+0.5*frame_np[1]-1
-                    save_heatmap(frame_np,Path(__file__).parent/f"imgs/gesture_{targets[0].item()}",f"label{targets[0].item()}_frame{t}.svg")
+                    save_heatmap(frame_np,savedir/f"imgs/gesture_{targets[0].item()}",f"label{targets[0].item()}_frame{t}.svg")
 
             saved_labels.append(targets[0].item())
 
@@ -105,7 +109,7 @@ def main():
                 break
 
     save_dict2json(
-        vars(args),saveto=Path(__file__).parent/"args.json"
+        vars(args),saveto=savedir/"args.json"
     )
 
     print_terminal("done")

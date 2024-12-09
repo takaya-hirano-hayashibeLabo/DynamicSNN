@@ -21,7 +21,7 @@ canvas:
     alpha: 0.0
 
   margin: #グラフの余白差分. グラフの余白がデフォルトからどれくらい変更されるか
-    left: 0.7 #[cm]
+    left: 0.8 #[cm]
     right: 0.2 #[cm]
     top: -0.7 #[cm]
     bottom: 1 #[cm]

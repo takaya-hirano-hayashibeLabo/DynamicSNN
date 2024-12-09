@@ -53,7 +53,13 @@ def plot_results(results_db, saveto: Path,fig_conf:dict):
     spacing = 3.0  # Further increased spacing between groups of bars
     index = [i * spacing for i in range(len(unique_time_pairs))]  # X locations for the groups
 
-    plt.figure(figsize=tuple(fig_conf["figsize"]))
+    if "figsize-cm" in fig_conf.keys():
+        w_cm,h_cm=fig_conf["figsize-cm"]
+        w_in=w_cm/2.54
+        h_in=h_cm/2.54
+        plt.figure(figsize=(w_in,h_in))
+    else:
+        plt.figure(figsize=tuple(fig_conf["figsize"]))
     cmp = plt.get_cmap(fig_conf["color-map"])
 
     for i, model in enumerate(unique_models):
@@ -199,7 +205,7 @@ def plot_results_facetgrid_1x4(results_db, saveto: Path, fig_conf: dict):
         )
     g.fig.add_artist(legend)
 
-    g.fig.tight_layout(rect=[0, 0, 1, 0.95])  # Adjust layout to make space for legend
+    # g.fig.tight_layout(rect=[0, 0, 1, 0.95])  # Adjust layout to make space for legend
 
     # Save the plot
     savefile = saveto if ".png" in str(saveto) or ".jpg" in str(saveto) else saveto / "acc_result_custom_facetgrid_1x4.svg"

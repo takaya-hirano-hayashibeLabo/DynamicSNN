@@ -229,24 +229,40 @@ class Pool2DTransform(nn.Module):
         return events  # Remove batch dimension
 
 
-def save_heatmap(frame,output_path,file_name,scale=5):
+def save_heatmap(frame, output_path, file_name, scale=5, border_size=10):
     """
     :param frame: [h x w]
+    :param border_size: Size of the white border to add around the heatmap.
     """
     import cv2
     import os
     import matplotlib.pyplot as plt
+    import numpy as np
 
     if not os.path.exists(output_path):
         os.makedirs(output_path)
 
-    h,w=frame.shape
+    h, w = frame.shape
     normalized_frame = ((frame + 1) / 2 * 255).astype(np.uint8)
-    # heatmap = cv2.applyColorMap(normalized_frame, cv2.COLORMAP_JET)
-    resized_heatmap = cv2.resize(normalized_frame, (w*scale,h*scale), interpolation=cv2.INTER_NEAREST)
+    resized_heatmap = cv2.resize(normalized_frame, (w * scale, h * scale), interpolation=cv2.INTER_NEAREST)
 
-    plt.imsave(str(output_path / file_name), resized_heatmap,cmap="viridis")
+    # Apply the viridis colormap
+    viridis_colormap = plt.get_cmap('viridis')
+    colored_heatmap = viridis_colormap(resized_heatmap / 255.0)  # Normalize to [0, 1] for colormap
+    colored_heatmap = (colored_heatmap[:, :, :3] * 255).astype(np.uint8)  # Convert to RGB
 
+    # Add a white border around the colored heatmap
+    bordered_heatmap = cv2.copyMakeBorder(
+        colored_heatmap, 
+        border_size, border_size, border_size, border_size, 
+        cv2.BORDER_CONSTANT, 
+        value=[255, 255, 255]  # White color
+    )
+
+    # Save the final image
+    plt.imsave(str(output_path / file_name), bordered_heatmap)
+
+    
 def save_heatmap_video(frames, output_path, file_name, fps=30, scale=5, frame_label_view=True):
     import cv2
     import subprocess

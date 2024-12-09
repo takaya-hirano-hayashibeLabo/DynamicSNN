@@ -12,6 +12,8 @@ from tqdm import tqdm
 import pandas as pd
 import numpy as np
 import yaml
+import seaborn as sns
+sns.set(style="darkgrid")
 
 def cm2inch(value):
     return value/2.54
@@ -126,7 +128,10 @@ def animate_volt_cmap(volt: np.ndarray, savepath: Path, filename="volt_animation
     N, T = volt.shape
 
     # Extract configuration settings
-    figsize = (cm2inch(config['canvas']['figsize']['width']), cm2inch(config['canvas']['figsize']['height']))
+    figsize = (
+        cm2inch(config['canvas']['figsize']['width']), 
+        cm2inch(config['canvas']['figsize']['height']),
+    )
     font_family = config['canvas']['fontstyle']['family']
     title_fontsize = config['canvas']['title']['fontsize']
     label_fontsize = config['canvas']['label']['fontsize']
@@ -187,6 +192,8 @@ def animate_volt_cmap(volt: np.ndarray, savepath: Path, filename="volt_animation
     # plt.tight_layout()
     adjust_margins(fig,config)
 
+    plt.grid(alpha=config["canvas"]["grid"]["alpha"])
+
     def update(frame):
         frame_image=np.zeros_like(volt)
         frame_image[:,:frame]=volt[:,:frame]
@@ -199,7 +206,7 @@ def animate_volt_cmap(volt: np.ndarray, savepath: Path, filename="volt_animation
         fig, update, frames=total_frames, blit=True, repeat=False
     )
 
-    ani.save(savepath / f"{filename}.mp4", writer='ffmpeg',fps=fps)
+    ani.save(savepath / f"{filename}.mp4", writer='ffmpeg',fps=fps,dpi=144)
     plt.close()
 
 
