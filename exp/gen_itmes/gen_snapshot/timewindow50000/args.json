@@ -1,0 +1,8 @@
+{
+    "device": 0,
+    "timewindow": 50000,
+    "insize": 128,
+    "framenum": 3,
+    "cmap": "viridis",
+    "scale": 1
+}

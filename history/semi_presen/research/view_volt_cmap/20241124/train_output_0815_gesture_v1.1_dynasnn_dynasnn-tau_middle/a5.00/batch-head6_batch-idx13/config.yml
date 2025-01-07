@@ -1,0 +1,71 @@
+# グラフ全体の設定
+canvas:
+
+  figsize:
+    height: 8.55 #[cm]
+    width: 9.92 #[cm]
+
+  fontstyle: 
+    family: "serif" #Arial, serif
+
+  title: #グラフタイトル
+    text: 
+    fontsize: 18
+
+  label: #xy軸のラベル
+    xlabel: "timestep"
+    ylabel: Neuron Index
+    fontsize: 22
+
+  grid:
+    alpha: 0.0
+
+  margin: #グラフの余白差分. グラフの余白がデフォルトからどれくらい変更されるか
+    left: 0.8 #[cm]
+    right: 0.2 #[cm]
+    top: -0.7 #[cm]
+    bottom: 1 #[cm]
+
+  limit: #xy軸の範囲
+    xmin: null
+    xmax: null
+    ymin: -0.5
+    ymax: 10.5
+
+  ticks: # 目盛りについて. limitにnullが指定されると無視される
+    visible: 
+      xlabel: true
+      ylabel: true
+
+    xwidth: 2
+    xbias: 0
+    xlabel_bias: 0
+
+    ywidth: 10
+    ybias: 0.5
+    ylabel_bias: 0
+
+    fontsize: 16
+    num_decimal_places: 0 #小数点以下の桁数
+    num_type: decimal #decimal, scientific
+
+
+
+heatmap:
+  cmap: viridis #カラーマップ
+
+  is_transposed: true #転置するかどうか
+
+  colorbar:
+    visible: true #カラーバーを表示するかどうか
+
+    label: #カラーバーのラベル
+      text: Volatage
+      fontsize: 18
+
+    ticks: #カラーバーの目盛り
+      fontsize: 14
+      norm: symlog #カラーバーのスケール {linear, log, symlog }
+      limit: #ヒートマップの値の範囲 
+        vmin: -10
+        vmax: 0.1

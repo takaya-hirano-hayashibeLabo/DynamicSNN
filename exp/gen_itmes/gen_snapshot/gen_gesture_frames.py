@@ -19,7 +19,7 @@ import matplotlib.pyplot as plt
 from math import floor
 
 
-from src.utils import load_yaml,print_terminal,calculate_accuracy,save_dict2json,save_heatmap
+from src.utils import load_yaml,print_terminal,calculate_accuracy,save_dict2json,save_heatmap, resize_heatmap, apply_cmap2heatmap
 
 
 def custom_collate_fn(batch):
@@ -37,21 +37,36 @@ def custom_collate_fn(batch):
     return inputs_padded, targets_tensor
 
 
+def save_snapshot(input_list:list[np.ndarray],cmap:str,scale:int,savedir:Path,filename:str):
+    if not os.path.exists(savedir):
+        os.makedirs(savedir)
+
+    num_frames=len(input_list)
+    fig, axes = plt.subplots(1, num_frames, figsize=(num_frames*2, 2))  # Use tight_layout
+    fig.subplots_adjust(left=0, right=1, top=1, bottom=0, wspace=0.01)  # Reduce wspace for tighter spacing
+    for i, ax in enumerate(axes):
+        frame = resize_heatmap(input_list[i], scale)
+        frame = apply_cmap2heatmap(frame, cmap)
+        ax.imshow(frame)
+        ax.axis("off")
+        
+    fig.savefig(savedir/filename)
+    plt.close(fig)
+
+
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--device",default=0,help="GPUの番号")
-    parser.add_argument("--timescale",default=1,type=int,help="何倍に時間をスケールするか. timescale=2でtimewindowが1/2になる.")
     parser.add_argument("--timewindow",default=3000,type=int)
     parser.add_argument("--insize",default=128,type=int)
-    parser.add_argument("--sequence",default=300,type=int)
-    parser.add_argument("--framenum",default=5,type=int)
+    parser.add_argument("--framenum",default=3,type=int)
+    parser.add_argument("--cmap",default="plasma",type=str)
+    parser.add_argument("--scale",default=1,type=int)
     args = parser.parse_args()
 
-    timescale=args.timescale
     timewindow=args.timewindow
     insize=args.insize
-    sequence=args.sequence
     framenum=args.framenum
 
     savedir=Path(__file__).parent/f"timewindow{timewindow}"
@@ -89,17 +104,22 @@ def main():
                 continue
 
             inputs[inputs>0]=1.0
-            if sequence>0 and inputs.shape[0]>sequence*timescale: #configでシーケンスが指定された場合はその長さに切り取る
-                inputs=inputs[:,:int(sequence*timescale)]
 
-            skip_frames=int(sequence*timescale//framenum)
+            skip_frames=int(inputs.shape[1]//framenum)
+            input_heatmaps=[]
             for t, frame_i in enumerate(inputs[0]):
-                if t>int(sequence*timescale):
+                if len(input_heatmaps)>=framenum:
                     break
+
                 if t%skip_frames==0:
                     frame_np=frame_i.to("cpu").detach().numpy()
                     frame_np=1.5*frame_np[0]+0.5*frame_np[1]-1
-                    save_heatmap(frame_np,savedir/f"imgs/gesture_{targets[0].item()}",f"label{targets[0].item()}_frame{t}.svg")
+                    input_heatmaps.append(frame_np)
+            save_snapshot(
+                input_heatmaps,cmap=args.cmap,scale=args.scale,
+                savedir=savedir/f"svgs/gesture_{targets[0].item()}",
+                filename=f"label{targets[0].item()}.svg"
+            )
 
             saved_labels.append(targets[0].item())
 

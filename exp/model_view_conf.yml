@@ -1,4 +1,5 @@
 figsize: [12,6]
+figsize-cm: [20.02,14.8] #cm指定(こっちが優先される)
 legend:
   fontsize: 26
 plot:
