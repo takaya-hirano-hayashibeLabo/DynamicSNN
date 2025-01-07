@@ -1,0 +1,8 @@
+{
+    "target": "/mnt/ssd1/hiranotakaya/master/dev/workspace/prj_202409_2MR/laplace-version/train-multitime/output/0902/gesture/snn/snn-tau_middle",
+    "device": 0,
+    "saveto": "data",
+    "batch_head": -1,
+    "batch_idx": -1,
+    "a": 0.5
+}

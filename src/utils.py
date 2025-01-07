@@ -229,6 +229,25 @@ class Pool2DTransform(nn.Module):
         return events  # Remove batch dimension
 
 
+def resize_heatmap(frame:np.ndarray, scale:int=5):
+    """
+    :param frame: [h x w], -1<=frame<=1
+    """
+    import cv2
+    h,w=frame.shape
+    frame=((frame+1)/2*255).astype(np.uint8) #[-1,1]を[0,255]に変換
+    resized_heatmap=cv2.resize(frame,(w*scale,h*scale),interpolation=cv2.INTER_NEAREST)
+    return resized_heatmap
+
+def apply_cmap2heatmap(frame:np.ndarray, cmap:str="viridis"):
+    import matplotlib.pyplot as plt
+    import numpy as np
+    viridis_colormap = plt.get_cmap(cmap)
+    colored_heatmap = viridis_colormap(frame / 255.0)  # Normalize to [0, 1] for colormap
+    colored_heatmap = (colored_heatmap[:, :, :3] * 255).astype(np.uint8)  # Convert to RGB
+    return colored_heatmap
+
+
 def save_heatmap(frame, output_path, file_name, scale=5, border_size=10):
     """
     :param frame: [h x w]

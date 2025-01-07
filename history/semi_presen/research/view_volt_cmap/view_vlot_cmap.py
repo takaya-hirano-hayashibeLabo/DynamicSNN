@@ -8,6 +8,7 @@ ROOT=Path(__file__).parent.parent.parent.parent.parent
 import sys
 sys.path.append(str(ROOT))
 
+import json
 import torch
 import yaml
 import matplotlib.pyplot as plt
@@ -81,9 +82,10 @@ def main():
     parser=argparse.ArgumentParser()
     parser.add_argument("--target",default="dyna-snn")
     parser.add_argument("--device",default=0)
-    parser.add_argument("--saveto")
+    parser.add_argument("--saveto",default="data")
     parser.add_argument("--batch_head",type=int,default=-1,help="0未満だと全てのバッチを対象とする")
     parser.add_argument("--batch_idx",type=int,default=-1,help="0未満だと全てのバッチを対象とする")
+    parser.add_argument("--a",type=float,default=1.0,help="時間軸の倍率")
     args=parser.parse_args()
 
     target_batch_head=int(args.batch_head)
@@ -94,12 +96,15 @@ def main():
     print(modelname)
 
 
-    a=5
+    a=args.a
 
     relativepath=args.saveto
     resdir=Path(__file__).parent/f"{relativepath}/{modelname}/a{a:.2f}"
     if not os.path.exists(resdir):
         os.makedirs(resdir)
+
+    args_dict=args.__dict__
+    json.dump(args_dict,open(resdir/"args.json","w"),indent=4)
 
 
     #>> configの準備 >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
