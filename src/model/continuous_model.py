@@ -76,7 +76,7 @@ class ContinuousSNN(nn.Module):
         torch.nn.utils.clip_grad_norm_(self.parameters(), self.clip_norm)
         
 
-    def forward(self,inspikes:torch.Tensor):
+    def forward(self,inspikes:torch.Tensor,return_v:bool=False):
         """
         :param inspikes: [N x T x xdim]
         """
@@ -87,10 +87,13 @@ class ContinuousSNN(nn.Module):
         out_v=out_v.permute(1,2,0) #[N x outdim x T] 時間方向は関連させない
         out:torch.Tensor=self.model(out_v) #[N x outdim x T]
 
-        return out.permute(0,2,1) #[N x T x outdim]
+        if return_v:
+            return out.permute(0,2,1),out_v
+        else:
+            return out.permute(0,2,1) #[N x T x outdim]
 
 
-    def dynamic_forward_given_scale(self,inspikes:torch.Tensor,scales:torch.Tensor):
+    def dynamic_forward_given_scale(self,inspikes:torch.Tensor,scales:torch.Tensor,return_v:bool=False):
 
         with torch.no_grad():
             in_sp=inspikes.permute((1,0,*[i+2 for i in range(inspikes.ndim-2)])) #[T x N x xdim]
@@ -99,4 +102,7 @@ class ContinuousSNN(nn.Module):
             out_v=out_v.permute(1,2,0)
             out:torch.Tensor=self.model(out_v)
 
-        return out.permute(0,2,1)
+        if return_v:    
+            return out.permute(0,2,1),out_v
+        else:
+            return out.permute(0,2,1)
