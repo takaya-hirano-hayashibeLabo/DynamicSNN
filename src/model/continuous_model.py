@@ -88,7 +88,7 @@ class ContinuousSNN(nn.Module):
         out:torch.Tensor=self.model(out_v) #[N x outdim x T]
 
         if return_v:
-            return out.permute(0,2,1),out_v
+            return out.permute(0,2,1),out_v.permute(0,2,1)
         else:
             return out.permute(0,2,1) #[N x T x outdim]
 
@@ -99,10 +99,11 @@ class ContinuousSNN(nn.Module):
             in_sp=inspikes.permute((1,0,*[i+2 for i in range(inspikes.ndim-2)])) #[T x N x xdim]
             _,_,out_v=self.time_encoder.dynamic_forward_v1(in_sp,scales)
 
+            out_v=out_v/(scales.unsqueeze(-1).unsqueeze(-1))
             out_v=out_v.permute(1,2,0)
             out:torch.Tensor=self.model(out_v)
 
         if return_v:    
-            return out.permute(0,2,1),out_v
+            return out.permute(0,2,1),out_v.permute(0,2,1)
         else:
             return out.permute(0,2,1)
