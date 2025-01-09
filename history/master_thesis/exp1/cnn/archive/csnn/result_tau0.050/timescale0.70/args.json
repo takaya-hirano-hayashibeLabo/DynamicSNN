@@ -1,0 +1,10 @@
+{
+    "testnums": 2,
+    "timescale": 0.7,
+    "tau": 0.05,
+    "batchsize": 10,
+    "track_batchsize": 3,
+    "device": 0,
+    "saveto": "archive/csnn",
+    "confpath": "/mnt/ssd1/hiranotakaya/master/dev/workspace/prj_202409_2MR/laplace-version/history/master_thesis/exp1/cnn/configs/csnn.yml"
+}
