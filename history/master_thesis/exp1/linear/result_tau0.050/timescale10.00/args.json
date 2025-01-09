@@ -1,0 +1,8 @@
+{
+    "testnums": 50,
+    "timescale": 10.0,
+    "tau": 0.05,
+    "batchsize": 100,
+    "track_batchsize": 5,
+    "device": "2"
+}
