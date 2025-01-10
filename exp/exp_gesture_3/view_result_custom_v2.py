@@ -52,13 +52,14 @@ def plot_results(results_db, saveto: Path,fig_conf:dict):
     bar_width = 0.2  # Width of each bar
     spacing = 3.0  # Further increased spacing between groups of bars
     index = [i * spacing for i in range(len(unique_time_pairs))]  # X locations for the groups
-
-    if "figsize-cm" in fig_conf.keys():
+    if "figsize-cm" in list(fig_conf.keys()):
+        print("figsize-cm is in fig_conf")
         w_cm,h_cm=fig_conf["figsize-cm"]
         w_in=w_cm/2.54
         h_in=h_cm/2.54
         plt.figure(figsize=(w_in,h_in))
     else:
+        print("figsize-cm is not in fig_conf")
         plt.figure(figsize=tuple(fig_conf["figsize"]))
     cmp = plt.get_cmap(fig_conf["color-map"])
 
@@ -162,8 +163,16 @@ def plot_results_facetgrid_1x4(results_db, saveto: Path, fig_conf: dict):
 
     # Set up the FacetGrid with specified column order
     col_order = sorted(results_db["time-pair"].unique())
-    aspect=fig_conf["figsize"][1]/fig_conf["figsize"][0]
-    g = sns.FacetGrid(results_db, col="time-pair", col_order=col_order,height=fig_conf["figsize"][1], aspect=aspect, sharey=True)
+
+    is_cm_figsize="figsize-cm" in fig_conf.keys()
+    if is_cm_figsize:
+        aspect=fig_conf["figsize-cm"][1]/fig_conf["figsize-cm"][0]
+        grid_height=fig_conf["figsize-cm"][1]/2.54
+    else:
+        aspect=fig_conf["figsize"][1]/fig_conf["figsize"][0]
+        grid_height=fig_conf["figsize"][1]
+    
+    g = sns.FacetGrid(results_db, col="time-pair", col_order=col_order,height=grid_height, aspect=aspect, sharey=True)
     
 
     # Define the bar plot function
