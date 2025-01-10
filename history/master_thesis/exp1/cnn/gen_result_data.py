@@ -16,9 +16,10 @@ import json
 import os
 import math
 from tqdm import tqdm
+from torch import nn
+
 from src.model import DynamicCSNN,DynamicResCSNN
 from src.utils import load_yaml,print_terminal
-
 
 def plot_voltage_heatmap(v_scaled:np.ndarray,v_snn:np.ndarray,v_dyna:np.ndarray,savepath:Path):
     fig,axes=plt.subplots(nrows=3,ncols=1,figsize=(10,5))
@@ -139,6 +140,40 @@ def plot_and_save_inputs(base_input:torch.Tensor, scaled_input:torch.Tensor, sav
     plt.close()
 
 
+def memory_batchnrm_params(model:nn.Module, in_size, in_channel,T, p, minibatchsize, epoch, device):
+    """
+    BatchNorm構造を持つモデルに学習データを流す. これによって平均と分散を記憶させる
+    :param model: モデル
+    :param in_size: 入力サイズ
+    :param in_channel: 入力チャンネル数
+    :param T: 時間ステップ数
+    :param p: スパイク確率
+    :param minibatchsize: ミニバッチサイズ
+    :param epoch: エポック数
+    """
+
+    model.train() #trainモードにしてbatchnrmのパラメータを更新させる
+    for e in range(epoch):
+        spikes=torch.where(
+            torch.rand(size=(T, minibatchsize, in_channel,in_size,in_size))<p,1.0,0.0
+        ).to(device)
+        _,_,_=model(spikes)
+
+
+def debug_batchnorm_params(model: nn.Module):
+    """
+    モデル内のBatchNorm層の平均（μ）と分散（σ）をデバッグする関数
+    :param model: PyTorchのモデル
+    """
+    for name, layer in model.named_modules():
+        if isinstance(layer, nn.BatchNorm2d) or isinstance(layer, nn.BatchNorm1d):
+            print(f"Layer: {name}")
+            print(f"  Running Mean (μ): {layer.running_mean.data}")
+            print(f"  Running Variance (σ): {layer.running_var.data}")
+            # print(f"  Weight: {layer.weight.data}")
+            # print(f"  Bias: {layer.bias.data}")
+            print("-" * 40)
+
 def main():
     parser=argparse.ArgumentParser()
     parser.add_argument("--testnums",type=int,default=10)
@@ -174,19 +209,26 @@ def main():
             model=DynamicResCSNN(conf=config["model"]).to(device) # テストエポックごとにモデルを初期化する. なぜなら未学習のモデルの出力は初期重みに死ぬほど依存するから
         else:
             model=DynamicCSNN(conf=config["model"]).to(device) # テストエポックごとにモデルを初期化する. なぜなら未学習のモデルの出力は初期重みに死ぬほど依存するから
-        model.eval() #モデルを評価モードにする
         
         T=300
         batch=args.batchsize #バッチよりもモデルの初期値に依存する
         insize=config["model"]["in-size"]
         in_channel=config["model"]["in-channel"]
-
-
         minibatch=50 if batch>50 else batch
+        p=0.1 #スパイク確率
+
+
+        if config["model"]["is-bn"]: #BatchNorm構造を持つモデルの場合はパラメータを記憶させる
+            memory_batchnrm_params(
+                model, config["model"]["in-size"], config["model"]["in-channel"], 
+                T, p, minibatch, 10, device
+            )
+        model.eval() #モデルを評価モードにする
+
+
         squared_error_lif_minibatch=[]
         squared_error_dyna_minibatch=[]
         for i_minibatch in tqdm(range(math.ceil(batch/minibatch))):
-            p=0.5
             base_input=torch.where(
                 torch.rand(size=(T, minibatch, in_channel,insize,insize))<p,1.0,0.0
             ).to(device)

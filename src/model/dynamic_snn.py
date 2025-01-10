@@ -478,7 +478,7 @@ def create_csnn_block(
 
     if is_bn:
         block.append(
-            nn.BatchNorm2d(out_channel)
+            nn.BatchNorm2d(out_channel,affine=False) #スケーリングγとバイアスβを学習しない
         )
 
     if pool_size>0:
@@ -638,7 +638,7 @@ def create_residual_block(
 
     if is_bn:
         block.append(
-            nn.BatchNorm2d(out_channel)
+            nn.BatchNorm2d(out_channel, affine=False) #スケーリングγとバイアスβを学習しない
         )
 
     if pool_size>0:
@@ -804,7 +804,7 @@ def create_residual_multi_layer_dynasnn_block(
     if is_bn:
         block.update([
             (f"BatchNorm2d{block_num}",
-            nn.BatchNorm2d(out_channel))
+            nn.BatchNorm2d(out_channel, affine=False))
         ])
 
     if pool_size>0:

@@ -6,7 +6,7 @@ model:
   out-size: 4
   hiddens: [4,8]
   pool-type: avg
-  pool-size: [2,2]
+  pool-size: [1,1]
   is-bn: true #batch normalizationするかどうか
 
   linear-hidden: 8

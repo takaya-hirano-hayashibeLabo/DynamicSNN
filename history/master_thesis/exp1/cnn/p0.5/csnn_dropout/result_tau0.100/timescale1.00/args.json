@@ -1,0 +1,10 @@
+{
+    "testnums": 50,
+    "timescale": 1.0,
+    "tau": 0.1,
+    "batchsize": 100,
+    "track_batchsize": 3,
+    "device": "5",
+    "saveto": "csnn_dropout",
+    "confpath": "configs/csnn_dropout.yml"
+}
