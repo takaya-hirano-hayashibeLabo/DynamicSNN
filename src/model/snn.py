@@ -116,6 +116,28 @@ class SNN(nn.Module):
         """
         torch.nn.utils.clip_grad_norm_(self.parameters(), self.clip_norm)
 
+
+    def split_weight_decay_params(self, no_decay_param_names:list=["w","bias"], weight_decay:float=0.01):
+        """
+        weight decayを適用するパラメータと適用しないパラメータを分ける  
+        L2正則化は基本的に重みのみ (biasや時定数には適用しない)
+        """
+        decay_params=[]
+        no_decay_params=[]
+        for name,param in self.model.named_parameters():
+            if any(nd in name for nd in no_decay_param_names):
+                no_decay_params.append(param)
+            else:
+                decay_params.append(param)
+
+        split_params=[
+            {"params":decay_params,"weight_decay":weight_decay},
+            {"params":no_decay_params,"weight_decay":0.0}
+        ]
+
+        return split_params
+
+
 def get_conv_outsize(model,in_size,in_channel):
     input_tensor = torch.randn(1, in_channel, in_size, in_size)
     with torch.no_grad():
@@ -372,7 +394,7 @@ class ResCSNN(SNN):
         if "fast".casefold() in conf["spike-grad"] and "sigmoid".casefold() in conf["spike-grad"]: 
             self.spike_grad = surrogate.fast_sigmoid()
 
-        is_bias=True
+        is_bias=conf["is-bias"] if "is-bias" in conf.keys() else True #CNNバイアスをつけるかどうか
 
         modules=[]
 
