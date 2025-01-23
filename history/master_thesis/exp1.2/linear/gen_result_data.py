@@ -163,11 +163,18 @@ def main():
             # 畳み込みを行う処理
             kernel_size = math.ceil(1 / a)  # カーネルサイズを設定
             
-            scaled_input = F.conv1d(base_input.permute(1, 2, 0), 
-                                            weight=torch.ones(1, 1, kernel_size).to(base_input.device), 
-                                            stride=kernel_size).permute(2, 0, 1)
-            scaled_input[scaled_input<0.5]=0.0
-            scaled_input[scaled_input>=0.5]=1.0
+            # print(f"base_input.shape: {base_input.shape}")
+            scaled_input=torch.Tensor([]).to(base_input.device)
+            for dim_i in range(config["model"]["in-size"]):
+                scaled_input_i = F.conv1d(base_input.permute(1, 2, 0)[:,dim_i].unsqueeze(1), 
+                                                weight=torch.ones(1, 1, kernel_size).to(base_input.device), 
+                                                stride=kernel_size).permute(2, 0, 1)
+                scaled_input_i[scaled_input_i<0.5]=0.0
+                scaled_input_i[scaled_input_i>=0.5]=1.0
+                # print(f"scaled_input_i.shape: {scaled_input_i.shape}")
+                scaled_input=torch.cat([scaled_input,scaled_input_i],dim=-1)
+            # scaled_input=torch.stack(scaled_input,dim=-1).to(base_input.device).squeeze(-2)
+            # print(f"scaled_input.shape: {scaled_input.shape}")
 
         org_s,org_i,org_v=model.forward(scaled_input)
         scaled_s,scaled_i,scaled_v=model.dynamic_forward_v1(scaled_input,a=torch.Tensor([a for _ in range(scaled_input.shape[0])]))
@@ -186,32 +193,32 @@ def main():
         mse_table+=np.concatenate([
             np.ones(shape=(track_batchsize,1))*i_test, #モデル番号
             np.arange(track_batchsize).reshape(-1,1), #バッチ番号
-            mse_snn_arr[:track_batchsize].reshape(-1,1), #SNNのMSE
-            mse_dyna_arr[:track_batchsize].reshape(-1,1), #DynaSNNのMSE
+            mse_snn_arr[:track_batchsize].mean(axis=-1).reshape(-1,1), #SNNのMSE
+            mse_dyna_arr[:track_batchsize].mean(axis=-1).reshape(-1,1), #DynaSNNのMSE
         ],axis=1).tolist()
         mse_table_pd=pd.DataFrame(mse_table,columns=["model idx","batch idx","mse_snn","mse_dyna"])
         mse_table_pd.to_csv(track_datapath/f"mse_table.csv",index=False)
         
 
         # データをトラッキング
-        save_tarck_data(
-            timesteps=torch.arange(0,scaled_v.shape[0]).cpu().numpy(),
-            input_base=base_input.to("cpu").detach().numpy(),
-            s_base=base_s.to("cpu").detach().numpy(),
-            i_base=base_i.to("cpu").detach().numpy(),
-            v_base=base_v.to("cpu").detach().numpy(),
-            v_scaled=v1_resampled.to("cpu").detach().numpy()[:scaled_T],
-            input_scaled=scaled_input.to("cpu").detach().numpy(),
-            s_snn=org_s.to("cpu").detach().numpy(),
-            i_snn=org_i.to("cpu").detach().numpy(),
-            v_snn=org_v.to("cpu").detach().numpy(),
-            s_dyna=scaled_s.to("cpu").detach().numpy(),
-            i_dyna=scaled_i.to("cpu").detach().numpy(),
-            v_dyna=scaled_v.to("cpu").detach().numpy(),
-            test_idx=i_test,
-            track_batchsize=args.track_batchsize,
-            savepath=track_datapath,
-        )
+        # save_tarck_data(
+        #     timesteps=torch.arange(0,scaled_v.shape[0]).cpu().numpy(),
+        #     input_base=base_input.to("cpu").detach().numpy(),
+        #     s_base=base_s.to("cpu").detach().numpy(),
+        #     i_base=base_i.to("cpu").detach().numpy(),
+        #     v_base=base_v.to("cpu").detach().numpy(),
+        #     v_scaled=v1_resampled.to("cpu").detach().numpy()[:scaled_T],
+        #     input_scaled=scaled_input.to("cpu").detach().numpy(),
+        #     s_snn=org_s.to("cpu").detach().numpy(),
+        #     i_snn=org_i.to("cpu").detach().numpy(),
+        #     v_snn=org_v.to("cpu").detach().numpy(),
+        #     s_dyna=scaled_s.to("cpu").detach().numpy(),
+        #     i_dyna=scaled_i.to("cpu").detach().numpy(),
+        #     v_dyna=scaled_v.to("cpu").detach().numpy(),
+        #     test_idx=i_test,
+        #     track_batchsize=args.track_batchsize,
+        #     savepath=track_datapath,
+        # )
 
 
     result_trajectory=np.array(result_trajectory)

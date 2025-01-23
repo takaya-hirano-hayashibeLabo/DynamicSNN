@@ -6,15 +6,15 @@
 # )
 
 MODEL_PATH_LIST=(
-    /mnt/ssd1/hiranotakaya/master/dev/workspace/prj_202409_2MR/laplace-version/train-multitime/output/20250116/dyna/dyna_tau0.03
-    /mnt/ssd1/hiranotakaya/master/dev/workspace/prj_202409_2MR/laplace-version/train-multitime/output/20250116/dyna/dyna_tau0.6
-    /mnt/ssd1/hiranotakaya/master/dev/workspace/prj_202409_2MR/laplace-version/train-multitime/output/20250116/dyna/dyna_tau0.012
-    /mnt/ssd1/hiranotakaya/master/dev/workspace/prj_202409_2MR/laplace-version/train-multitime/output/20250116/paramsnn/paramsnn_tau0.03
-    /mnt/ssd1/hiranotakaya/master/dev/workspace/prj_202409_2MR/laplace-version/train-multitime/output/20250116/paramsnn/paramsnn_tau0.6
-    /mnt/ssd1/hiranotakaya/master/dev/workspace/prj_202409_2MR/laplace-version/train-multitime/output/20250116/paramsnn/paramsnn_tau0.012
-    /mnt/ssd1/hiranotakaya/master/dev/workspace/prj_202409_2MR/laplace-version/train-multitime/output/20250116/snn/snn_tau0.03
-    /mnt/ssd1/hiranotakaya/master/dev/workspace/prj_202409_2MR/laplace-version/train-multitime/output/20250116/snn/snn_tau0.6
-    /mnt/ssd1/hiranotakaya/master/dev/workspace/prj_202409_2MR/laplace-version/train-multitime/output/20250116/snn/snn_tau0.012
+    /mnt/ssd1/hiranotakaya/master/dev/workspace/prj_202409_2MR/laplace-version/train-multitime/output/complete_model_20250121/dyna/dyna_tau0.008
+    /mnt/ssd1/hiranotakaya/master/dev/workspace/prj_202409_2MR/laplace-version/train-multitime/output/complete_model_20250121/dyna/dyna_tau0.012
+    /mnt/ssd1/hiranotakaya/master/dev/workspace/prj_202409_2MR/laplace-version/train-multitime/output/complete_model_20250121/dyna/dyna_tau0.024
+    /mnt/ssd1/hiranotakaya/master/dev/workspace/prj_202409_2MR/laplace-version/train-multitime/output/complete_model_20250121/paramsnn/paramsnn_tau0.008
+    /mnt/ssd1/hiranotakaya/master/dev/workspace/prj_202409_2MR/laplace-version/train-multitime/output/complete_model_20250121/paramsnn/paramsnn_tau0.012
+    /mnt/ssd1/hiranotakaya/master/dev/workspace/prj_202409_2MR/laplace-version/train-multitime/output/complete_model_20250121/paramsnn/paramsnn_tau0.024
+    /mnt/ssd1/hiranotakaya/master/dev/workspace/prj_202409_2MR/laplace-version/train-multitime/output/complete_model_20250121/snn/snn_tau0.008
+    /mnt/ssd1/hiranotakaya/master/dev/workspace/prj_202409_2MR/laplace-version/train-multitime/output/complete_model_20250121/snn/snn_tau0.012
+    /mnt/ssd1/hiranotakaya/master/dev/workspace/prj_202409_2MR/laplace-version/train-multitime/output/complete_model_20250121/snn/snn_tau0.024
 )
 
 TIMESCALE_LIST=(
@@ -22,8 +22,8 @@ TIMESCALE_LIST=(
     1 2 3 4 5 6 7 8 9 10
 )
 
-SAVETO=20250117/result
-TESTNUM=2
+SAVETO=20250121/result
+TESTNUM=5
 DEVICE=5
 
 for TIMESCALE in ${TIMESCALE_LIST[@]};do

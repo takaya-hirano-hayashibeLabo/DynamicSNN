@@ -1,0 +1,10 @@
+{
+    "model": "dynamic-snn",
+    "model_dir": "dyna_tau0.012",
+    "datatype": "gesture",
+    "time-scale": 0.1,
+    "acc_mean": 0.6345945945945946,
+    "acc_std": 0.021239873193933525,
+    "loss_mean": 2.0336479981740316,
+    "loss_std": 0.01212558064879855
+}

@@ -1,0 +1,10 @@
+{
+    "model": "snn",
+    "model_dir": "snn_tau0.024",
+    "datatype": "gesture",
+    "time-scale": 3.0,
+    "acc_mean": 0.8659459459459459,
+    "acc_std": 0.01048146996198125,
+    "loss_mean": 1.8518500645955407,
+    "loss_std": 0.007838772070706922
+}
