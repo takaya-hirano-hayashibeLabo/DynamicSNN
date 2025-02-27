@@ -1,0 +1,8 @@
+{
+    "device": "0",
+    "timescale": 1,
+    "timewindow": 75000,
+    "insize": 128,
+    "sequence": 300,
+    "framenum": 3
+}
